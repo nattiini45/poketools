@@ -17,8 +17,7 @@ import { DEFAULT_ROUTE_TIMEOUT_MS, type VerifyContext } from '../../dispatch';
 import { uid } from '../../plans/__tests__/fixtures';
 import { AdminAgentStoreError } from '../../store/errors';
 import { EXECUTION_ERROR_STATUS, blastClaims, extractStepResult, ProposalExecutionError, REAPER_AGE_MS, RESUME_WINDOW_MS, ROUTE_MAX_DURATION_SECONDS, SETTLE_MS, STEP_DEADLINE_MS, executeProposal } from '../executor';
-import { ownershipRegistryVersion, type ProposalStorageMode } from '../../registry/ownership-version';
-import { type ProposalOwnershipFence } from '../ownership-contract';
+import { ownershipRegistryVersion, type ProposalOwnershipFence, type ProposalStorageMode } from '../ownership-contract';
 import type { StoredStep } from '../steps';
 import { ADMIN, OTHER_ADMIN } from './helpers';
 import { LEAGUE_ID, PHASE_IDS, RULESET_ID, makeWorld, okReply, rejection, reseal, statusesOf, type World } from './executor-helpers';
@@ -108,6 +107,96 @@ describe('the live storage mode fence', () => {
       code: 'proposal_stale', reason: 'recheck_failed',
     });
     expect(world.row.status).toBe('stale');
+    expectNothingRan();
+  });
+
+  it('does not dispatch a legacy phase creation binding even with a matching native registry stamp', async () => {
+    reseal(world, (steps) => {
+      steps.splice(0, 2);
+      steps.splice(1);
+      Object.assign(steps[0], { path_params: { id: LEAGUE_ID }, blocked_by: [], preconditions: [] });
+    });
+    world.row.tool_registry_version = ownershipRegistryVersion(world.registryVersion, 'native-phase-v1');
+    expect(await refusal(executeProposal({ ...world.deps, ownership: ownership('phase') }, await world.input()))).toMatchObject({
+      code: 'proposal_stale', reason: 'unsupported_phase_ownership',
+    });
+    expectNothingRan();
+  });
+
+  it.each([null, 'legacy'] as const)('keeps the legacy phase Build and read-back intact in %s', async (mode) => {
+    const fence = ownership(mode);
+    const result = await executeProposal({ ...world.deps, ownership: fence }, await world.input());
+    expect(result.status).toBe('completed');
+    expect(world.calledOps()).toEqual(['league_create', 'roster_add', 'phase_create', 'phase_create']);
+    expect(world.verifies.map(({ op }) => op)).toEqual(world.calledOps());
+    expect(fence.reader.resolve).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch if storage changed between the recheck and the call', async () => {
+    const fence = ownership('phase');
+    fence.mode.mockResolvedValueOnce('legacy').mockResolvedValueOnce('legacy');
+    const result = await executeProposal({ ...world.deps, ownership: fence }, await world.input());
+    expect(result.status).toBe('stale');
+    expect(world.calls).toEqual([]);
+  });
+
+  it.each([null, 'phase', 'frozen_phase', 'frozen_legacy'] as const)('dispatches and reads back a standalone tournament operation in %s', async (mode) => {
+    const tournamentId = uid(5555);
+    reseal(world, (steps) => {
+      steps.splice(1);
+      Object.assign(steps[0], {
+        key: 'roster.1', op: 'tournament_participant_add', route_template: '/api/tournaments/[id]/participants',
+        path_params: { id: tournamentId }, body_template: { player_id: OTHER_ADMIN },
+        creates: false, ref_key: 'roster', preconditions: [],
+      });
+    });
+    if (mode === 'phase' || mode === 'frozen_phase') world.row.tool_registry_version = ownershipRegistryVersion(world.registryVersion, 'native-phase-v1');
+    world.verify.tournament_participant_add = () => ({ status: 'confirmed' });
+    const fence = ownership(mode, true);
+    const result = await executeProposal({ ...world.deps, ownership: fence }, await world.input());
+    expect(result.status).toBe('completed');
+    expect(world.calls).toEqual([expect.objectContaining({ op: 'tournament_participant_add', params: { id: tournamentId }, body: { player_id: OTHER_ADMIN } })]);
+    expect(world.verifies).toEqual([{ op: 'tournament_participant_add', outcomeKind: 'ok' }]);
+    if (mode === null) expect(fence.reader.resolve).not.toHaveBeenCalled();
+    else expect(fence.reader.resolve).toHaveBeenCalledWith([{ resource: 'competition', owner: { kind: 'tournament', tournamentId } }]);
+  });
+});
+
+describe('the live storage mode fence', () => {
+  function ownership(mode: ProposalStorageMode, standalone = false) {
+    return {
+      mode: vi.fn<ProposalOwnershipFence['mode']>().mockResolvedValue(mode),
+      reader: { resolve: vi.fn<ProposalOwnershipFence['reader']['resolve']>(async (refs) => standalone ? refs : refs.map(() => null)) },
+    };
+  }
+
+  it.each(['approve', 'resume'] as const)('rejects the legacy generation on %s after activation', async (operation) => {
+    if (operation === 'resume') {
+      world.row.status = 'executing';
+      world.row.approved_by = ADMIN;
+      world.row.executing_started_at = new Date(world.clock.ms).toISOString();
+    }
+    const input = await (operation === 'approve' ? world.input() : world.resumeInput());
+    const fence = ownership('phase');
+    expect(await refusal(executeProposal({ ...world.deps, ownership: fence }, input))).toMatchObject({
+      code: 'proposal_stale', reason: 'registry_version_changed',
+    });
+    expect(fence.reader.resolve).not.toHaveBeenCalled();
+    expect(world.row.status).toBe('stale');
+    expectNothingRan();
+  });
+
+  it.each(['frozen_legacy', 'frozen_phase'] as const)('refuses approval and resume without mutating the proposal in %s', async (mode) => {
+    const deps = { ...world.deps, ownership: ownership(mode) };
+    await expect(executeProposal(deps, await world.input())).rejects.toMatchObject({ code: 'phase_storage_unavailable', statusCode: 503 });
+    expect(world.row.status).toBe('proposed');
+    world.row.status = 'executing';
+    world.row.approved_by = ADMIN;
+    world.row.executing_started_at = new Date(world.clock.ms).toISOString();
+    await expect(executeProposal(deps, await world.resumeInput())).rejects.toMatchObject({ code: 'phase_storage_unavailable', statusCode: 503 });
+    expect(world.row.status).toBe('executing');
+    expect(world.store.log).toEqual([]);
+    expect(world.rateLimit).not.toHaveBeenCalled();
     expectNothingRan();
   });
 

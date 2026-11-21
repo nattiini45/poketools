@@ -22,6 +22,7 @@
     {"method": "PATCH", "path": "/api/tournaments/[id]/participants", "class": "B", "phase": "P1", "operation": "tournament seeds"},
     {"method": "POST", "path": "/api/generate-round/[tid]", "class": "G", "phase": "P1", "operation": "propose_start_phase / propose_generate_round"},
     {"method": "POST", "path": "/api/tournaments/[id]/generate-bracket", "class": "G", "phase": "P1", "operation": "propose_generate_bracket"},
+    {"method": "POST", "path": "/api/seasons/[id]/phases/[phaseId]/generate-bracket", "class": "G", "phase": "P1", "operation": "generate_phase_bracket"},
     {"method": "POST", "path": "/api/ruleset-definitions/[id]/publish", "class": "G", "phase": "P1", "operation": "propose_publish_ruleset"},
     {"method": "POST", "path": "/api/ruleset-definitions/[id]/pins", "class": "G", "phase": "P1", "operation": "propose_move_pin"},
     {"method": "DELETE", "path": "/api/ruleset-definitions/[id]", "class": "G", "phase": "P1", "operation": "propose_undo (delete a never-published ruleset draft)"},

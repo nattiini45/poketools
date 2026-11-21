@@ -9,10 +9,13 @@ import 'server-only';
  * the post cannot drift apart. What leaves this module is a row id (not a secret), the admin-typed label and the provider:
  * never a webhook URL, never a credential. A label that looks like a URL is replaced by the URL's masked hint.
  */
-import { matchesFilter, matchesFormatOptions } from '@/lib/discord/matchers';
+import { matchesFilter, matchesFormatOptions, notificationFilterType } from '@/lib/discord/matchers';
 import { webhookUrlHint } from '@/lib/discord/webhook-view';
 import { matchesEventFilter } from '@/lib/social/matchers';
 import { resolveWebhooks } from '@/lib/supabase/queries/discord-webhooks';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import { resolvePhaseWebhooks } from '@/lib/supabase/queries/phase-discord-webhooks';
+import { resolvePhaseSocialIntegrations } from '@/lib/supabase/queries/phase-social-integrations';
 import { resolveSocialIntegrations } from '@/lib/supabase/queries/social-integrations';
 import type { DiscordEventType } from '@/types/discord';
 
@@ -53,7 +56,24 @@ export async function previewRecipients(input: { eventType: DiscordEventType; to
   const { eventType, tournamentId, seasonId } = input;
   const kind = KIND_OF_EVENT[eventType] ?? eventType;
   const [webhooks, integrations] = await Promise.all([resolveWebhooks(tournamentId, seasonId), resolveSocialIntegrations(tournamentId, seasonId)]);
+  return previewMatchingRecipients(eventType, kind, webhooks, integrations);
+}
 
+/** Mirrors the native full-bracket senders and exposes only the existing masked preview. A wrong owner has no preview. */
+export async function previewPhaseBracketRecipients(owner: { seasonId: string; phaseId: string }): Promise<RecipientPreview | null> {
+  const phaseId = owner.phaseId.toLowerCase();
+  const phase = await getPhaseById(phaseId);
+  if (phase?.id !== phaseId || phase.season_id !== owner.seasonId.toLowerCase()) return null;
+  const [webhooks, integrations] = await Promise.all([resolvePhaseWebhooks(phase.id), resolvePhaseSocialIntegrations(phase.id)]);
+  return previewMatchingRecipients(notificationFilterType('round_generated'), 'round_generated', webhooks, integrations);
+}
+
+function previewMatchingRecipients(
+  eventType: DiscordEventType,
+  kind: string,
+  webhooks: Awaited<ReturnType<typeof resolvePhaseWebhooks>>,
+  integrations: Awaited<ReturnType<typeof resolvePhaseSocialIntegrations>>,
+): RecipientPreview {
   const discord = webhooks
     .filter((webhook) => matchesFilter(webhook, eventType) && matchesFormatOptions(webhook, { data: { kind } }))
     .map((webhook) => ({

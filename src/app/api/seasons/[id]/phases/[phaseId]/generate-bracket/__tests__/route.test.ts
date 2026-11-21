@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, expect, it, vi } from 'vitest';
+import { checkCall, invokeRoute, type VerifyCall } from '@/lib/ai/admin-agent/dispatch';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { recordAuthSession } from '@/lib/auth/session-override';
+import { generatePhaseBracket } from '@/app/api/admin/agent/_ops/g/generate-phase-bracket';
 import { POST } from '../route';
 import { POST as REPAIR } from '../../repair-bracket/route';
 import { POST as REGENERATE } from '../../regenerate-bracket/route';
@@ -11,8 +14,10 @@ const m = vi.hoisted(() => ({
   expire: vi.fn(), audit: vi.fn(), discord: vi.fn(), social: vi.fn(), formatAttached: vi.fn(),
   kitPhase: vi.fn(), kitContext: vi.fn(), stageStart: vi.fn(), fireEvent: vi.fn(),
   phaseMatches: vi.fn(), phaseMatch: vi.fn(), resetMatch: vi.fn(), invalidateMatch: vi.fn(),
+  matchRoundIds: vi.fn(),
   legacy: vi.fn(() => { throw new Error('Legacy persistence must not run'); }),
 }));
+vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: m.actor,
   AuthError: class extends Error {
@@ -24,7 +29,9 @@ vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: m.m
 vi.mock('@/lib/supabase/client', () => ({ supabase: { rpc: m.rpc } }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: m.season, updateSeason: m.updateSeason }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: m.phase, getPhaseParticipants: m.participants }));
-vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getMatchesByPhase: m.phaseMatches, getPhaseMatchById: m.phaseMatch }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({
+  getMatchesByPhase: m.phaseMatches, getPhaseMatchById: m.phaseMatch, getPhaseBracketMatchRoundIds: m.matchRoundIds,
+}));
 vi.mock('@/lib/supabase/queries/phase-rounds', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/lib/supabase/queries/phase-rounds')>(),
   getRoundsByPhase: m.rounds, updatePhaseRoundStatus: m.startRound,
@@ -56,6 +63,7 @@ const actor = { playerId: 'player-admin', name: 'Test Admin', isAdmin: false };
 const phase = {
   id: phaseId, season_id: id, name: 'Playoffs', bracket_type: 'single_elim', status: 'upcoming',
   current_round: 0, best_of_default: 3, bo_overrides: { Finals: 5 }, third_place_enabled: true,
+  archived: false, stage_spec: null, enrollment_source: { type: 'roster', frozen: false },
   updated_at: '2026-11-17T10:00:00Z',
 };
 const players = ['Alpha', 'Bravo', 'Charlie'].map((name, index) => ({
@@ -66,6 +74,21 @@ const ctx = (path = { id: id.toUpperCase(), phaseId: phaseId.toUpperCase() }) =>
 const request = (body?: unknown, query = '') => new NextRequest(`http://localhost/${query}`, {
   method: 'POST', body: JSON.stringify(body),
 });
+const bracketCall: VerifyCall = {
+  step: { key: 'generate_phase_bracket', op: 'generate_phase_bracket', entity_type: 'phase', targets: [] },
+  params: { id, phaseId }, body: {}, query: {},
+};
+const approval = { adminId: actor.playerId, approvedAt: '2026-11-17T10:01:00Z' };
+
+function dispatchBracket(call: VerifyCall = bracketCall) {
+  const session = { user: { id: actor.playerId, name: actor.name }, player: null, expires: '2099-01-01T00:00:00.000Z' };
+  recordAuthSession(session);
+  return invokeRoute(generatePhaseBracket, call, {
+    session,
+    inbound: request(),
+    audit: { agent_conversation_id: id, agent_proposal_id: other, agent_step: call.step.key },
+  });
+}
 
 function kitLeague() {
   m.season.mockResolvedValue({ id, status: 'active', format_type: 'custom' });
@@ -94,6 +117,66 @@ beforeEach(() => {
   m.rounds.mockResolvedValue([]);
   m.rpc.mockResolvedValue({ data: null, error: null });
   m.phaseMatches.mockResolvedValue([]);
+});
+
+it('dispatches only the strict native request and verifies the owner, receipt and persisted bracket without posting again', async () => {
+  expect(checkCall(generatePhaseBracket, bracketCall)).toEqual({ ok: true });
+  expect(checkCall(generatePhaseBracket, { ...bracketCall, params: { id } })).toMatchObject({ ok: false, reason: 'params' });
+  expect(checkCall(generatePhaseBracket, { ...bracketCall, body: { start_round: true } })).toMatchObject({ ok: false, reason: 'body' });
+  const outcome = await dispatchBracket();
+  expect(outcome).toMatchObject({ kind: 'ok', httpStatus: 201, data: { rounds_created: 2, matches_materialized: 1 } });
+  expect(m.discord).toHaveBeenCalledOnce();
+  expect(m.social).toHaveBeenCalledOnce();
+  expect(m.kitPhase).not.toHaveBeenCalled();
+
+  const writtenRounds: Array<{ id: string; round_number: number }> = m.rpc.mock.calls[0][1].p_rounds;
+  m.phase.mockResolvedValue({ ...phase, status: 'active', current_round: 1, enrollment_source: { type: 'roster', frozen: true } });
+  m.season.mockResolvedValue({ id, status: 'active', format_type: 'singles' });
+  m.rounds.mockResolvedValue(writtenRounds.map((round) => ({
+    ...round, phase_id: phaseId, status: 'pending', created_at: '2026-11-17T10:01:01Z',
+  })));
+  m.matchRoundIds.mockResolvedValue([writtenRounds[0].id]);
+  expect(await generatePhaseBracket.verify?.(bracketCall, outcome, approval)).toEqual({
+    status: 'confirmed', detail: { id: phaseId, season_id: id, rounds: 2, matches: 1 },
+  });
+  expect(m.matchRoundIds).toHaveBeenCalledExactlyOnceWith(phaseId);
+
+  m.matchRoundIds.mockResolvedValueOnce([other]);
+  expect(await generatePhaseBracket.verify?.(bracketCall, outcome, approval)).toEqual({ status: 'unknown' });
+  m.phase.mockResolvedValueOnce({ ...phase, id: phaseId, season_id: other });
+  expect(await generatePhaseBracket.verify?.(bracketCall, outcome, approval)).toEqual({ status: 'unknown' });
+  expect(m.rpc).toHaveBeenCalledOnce();
+  expect(m.discord).toHaveBeenCalledOnce();
+  expect(m.social).toHaveBeenCalledOnce();
+  expect(m.legacy).not.toHaveBeenCalled();
+});
+
+it('refuses the Assistant path for custom, active, archived, not-enrolled and start-round requests at the real route', async () => {
+  m.season.mockResolvedValueOnce({ id, status: 'upcoming', format_type: 'custom' });
+  await expect(dispatchBracket()).resolves.toMatchObject({ kind: 'conflict', code: 'proposal_stale' });
+  for (const override of [{ status: 'active' }, { archived: true }, { enrollment_source: null }, { stage_spec: { key: 'kit' } }]) {
+    m.phase.mockResolvedValueOnce({ ...phase, ...override });
+    await expect(dispatchBracket()).resolves.toMatchObject({ kind: 'conflict', code: 'proposal_stale' });
+  }
+  await expect(dispatchBracket({ ...bracketCall, body: { start_round: true } })).resolves.toMatchObject({ kind: 'conflict', code: 'proposal_stale' });
+  expect(m.participants).not.toHaveBeenCalled();
+  expect(m.kitPhase).not.toHaveBeenCalled();
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(m.discord).not.toHaveBeenCalled();
+  expect(m.social).not.toHaveBeenCalled();
+});
+
+it('does not adopt a matching bracket after an ambiguous dispatched outcome', async () => {
+  m.updateSeason.mockRejectedValueOnce(new Error('League start failed after the bracket commit'));
+  const outcome = await dispatchBracket();
+  expect(outcome).toMatchObject({ kind: 'masked_server_error', httpStatus: 500, unknownOutcome: true });
+  m.phase.mockResolvedValue({ ...phase, status: 'active', current_round: 1, enrollment_source: { type: 'roster', frozen: true } });
+  m.matchRoundIds.mockResolvedValue([phaseId]);
+  expect(await generatePhaseBracket.verify?.(bracketCall, outcome, approval)).toEqual({ status: 'unknown' });
+  expect(m.matchRoundIds).not.toHaveBeenCalled();
+  expect(m.rpc).toHaveBeenCalledOnce();
+  expect(m.discord).not.toHaveBeenCalled();
+  expect(m.social).not.toHaveBeenCalled();
 });
 
 it('repairs a missing native final from its completed feeder without rewriting the feeder', async () => {

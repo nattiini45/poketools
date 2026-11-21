@@ -36,8 +36,7 @@ import { DEFAULT_ROUTE_TIMEOUT_MS, checkCall, harnessError, invokeRoute, isUnkno
 import type { BindingRegistry, DispatchContext, DispatchQuery, Outcome, QueryValue, RouteBinding, VerifyContext, VerifyResult } from '../dispatch';
 import type { AdminAgentConfig } from '../env';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
-import { ownershipRegistryVersion, proposalStorageGeneration, type AgentStorageGeneration, type ProposalStorageMode } from '../registry/ownership-version';
-import { allowsProposalSteps, isProposalStorageFrozen, type ProposalOwnershipFence } from './ownership-contract';
+import { allowsProposalSteps, isProposalStorageFrozen, ownershipRegistryVersion, proposalStorageGeneration, type AgentStorageGeneration, type ProposalOwnershipFence, type ProposalStorageMode } from './ownership-contract';
 import { isRefObject, REF_PATH_PATTERN } from '../plans/route-bodies';
 import { PLAN_OPS, type PlanOp } from '../plans/ops';
 import { UNDO_MAX_STEPS } from '../plans/undo';
