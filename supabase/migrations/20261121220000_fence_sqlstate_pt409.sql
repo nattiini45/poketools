@@ -168,7 +168,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.rating_replace_player_history(uuid, jsonb, jsonb, uuid[]) IS
-  'Atomically replace one player''s rating curve: upsert player_ratings, delete and re-insert that player''s rating_history rows (single transaction, per-player advisory lock shared with rating_apply_match_result). Fenced on p_expected_history_match_ids (the player''s own history rows the replay read;
+  'Atomically replace one player''s rating curve: upsert player_ratings, delete and re-insert that player''s rating_history rows (single transaction, per-player advisory lock shared with rating_apply_match_result). Fenced on p_expected_history_match_ids (the player''s own history rows the replay read; rows of test-league matches are ignored): a row for a completed match outside it raises PT409 with nothing written. A p_history row for a test-league match (match_in_test_season) raises PT409 too. Returns the number of history rows inserted. Service-role only.';
 
 CREATE OR REPLACE FUNCTION public.claim_guest_player(
   p_guest_id uuid,
