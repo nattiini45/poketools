@@ -13,7 +13,7 @@ import {
 } from '@/lib/supabase/queries/players';
 import type { SessionPlayerRow } from '@/lib/supabase/queries/players';
 import { authorizeCredentials } from '@/lib/auth/credentials';
-import { resolveCredentialsSuperadminLink } from '@/lib/auth/superadmin';
+import { isLiveSuperadminIdentity, resolveCredentialsSuperadminLink } from '@/lib/auth/superadmin';
 import { isSessionRevoked, SessionRevokedError } from '@/lib/auth/session-epoch';
 import { verifyLinkToken } from '@/lib/utils/crypto';
 import { discordOAuthEnabled, discordOAuthEnvSchema, readEnv, requireEnv } from '@/lib/env';
@@ -66,7 +66,10 @@ async function currentSessionPlayerId(): Promise<string | null> {
   const row = await getSessionPlayerRowByIdentity(session.provider ?? 'discord', identityId);
   if (!row) return null;
   if (isSessionRevoked(session.authAt, row.sessions_valid_after)) return null;
-  if (!row.is_admin && (row.status === 'banned' || row.status === 'suspended')) return null;
+  // A superadmin is a site admin whatever the stored flag says; the ordinary
+  // is_admin/stats ban or suspension must not lock the recovery account out of linking.
+  const superadmin = await isLiveSuperadminIdentity(session);
+  if (!superadmin && !row.is_admin && (row.status === 'banned' || row.status === 'suspended')) return null;
   return row.id;
 }
 

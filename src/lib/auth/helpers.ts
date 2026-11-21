@@ -49,8 +49,8 @@ import { auth, loadSessionPlayer } from '@/auth';
 import { getVerifiedSession } from '@/lib/auth/session-override';
 import { SessionRevokedError } from '@/lib/auth/session-epoch';
 import {
+  isLiveSuperadminIdentity,
   isReservedSuperadminEmail,
-  resolveCredentialsSuperadminLink,
   superadminDiscordId,
 } from '@/lib/auth/superadmin';
 import type { Session } from 'next-auth';
@@ -115,22 +115,9 @@ function sessionRevokedError(): AuthError {
   return new AuthError('Not authenticated', 401, 'unauthenticated');
 }
 
-/**
- * Whether the credentials session's identity is the linked superadmin, read
- * from the database (the token's `superadminLinked` can be 5 minutes old).
- * Memoised per server render; only the reserved address ever reaches the query.
- */
-const readCredentialsSuperadminLink = cache(
-  (authUserId: string, email: string): Promise<boolean> => resolveCredentialsSuperadminLink(authUserId, email)
-);
-
 /** The superadmin decision from live data: the snowflake for Discord, the Discord-linked reserved email for credentials. */
 async function isLiveSuperadmin(session: Session): Promise<boolean> {
-  if (session.provider !== 'credentials') return isSuperadmin(session);
-  const authUserId = session.user?.id;
-  const email = session.user?.email;
-  if (!authUserId || !email || !isReservedSuperadminEmail(email)) return false;
-  return readCredentialsSuperadminLink(authUserId, email);
+  return isLiveSuperadminIdentity(session);
 }
 
 /**
