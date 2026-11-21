@@ -162,9 +162,10 @@ export default async function Home() {
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8">
-      {/* Hero: the title screen. The wordmark and the calls to action on the arena sand, the Pokéball and the
-          site's scoreboard on the slab (the league hero's versus-screen classes, so both read as one hand). */}
-      <section aria-labelledby="home-hero-heading" className="league-hero league-hero-split overflow-hidden rounded-poke-lg border border-hairline">
+      {/* Hero: the title screen. The wordmark and the calls to action straight on the page background, the
+          Pokéball and the site's scoreboard on the slab (the league hero's versus-screen classes, so both read
+          as one hand). */}
+      <section aria-labelledby="home-hero-heading" className="league-hero league-hero-split">
         <div className="relative min-w-0 px-5 py-8 sm:px-10 sm:py-14">
           <h1 id="home-hero-heading" className="font-heading text-[clamp(2.75rem,9vw,4.5rem)] leading-none text-fg">
             {/* i18n-ignore: brand wordmark (PokéTools), the same in every language */}

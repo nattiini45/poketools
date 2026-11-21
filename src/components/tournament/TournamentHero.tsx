@@ -32,8 +32,9 @@ interface TournamentHeroProps {
 
 /**
  * The tournament hero (plan §4.2, B3): the league hero's skeleton for one tournament or league phase. The name,
- * status and round on the arena sand; on the versus slab the match in progress, else the next kickoff, else the
- * top of the table. It is the page's `h1`. Server component; it renders from what the page already read.
+ * status and round sit straight on the page background; on the versus slab the match in progress, else the next
+ * kickoff, else the top of the table. It is the page's `h1`. Server component; it renders from what the page
+ * already read.
  */
 export default function TournamentHero({ tournament, league, roundCount, view, matchHref, locale }: TournamentHeroProps) {
   const t = createTranslator(tournamentsMessages, locale);
@@ -49,7 +50,7 @@ export default function TournamentHero({ tournament, league, roundCount, view, m
     <section
       aria-labelledby="tournament-hero-heading"
       data-tournament-hero={match?.kind ?? (leader ? 'leader' : 'plain')}
-      className={cn('league-hero overflow-hidden rounded-poke-lg border border-hairline', (match || leader) && 'league-hero-split')}
+      className={cn('league-hero', (match || leader) && 'league-hero-split')}
     >
       <div className="relative min-w-0 px-5 py-6 sm:px-8 sm:py-9">
         {league && (
@@ -78,7 +79,6 @@ export default function TournamentHero({ tournament, league, roundCount, view, m
           {enumLabel(enums, 'bracketType', tournament.bracket_type)} · {tc('bestOf', { count: tournament.best_of_default })}
           {tournament.is_doubles && <> · {t('list.doubles')}</>} · {tournament.ruleset_name}
         </p>
-        {tournament.description && <p className="mt-2 max-w-[62ch] whitespace-pre-wrap text-body text-fg-muted">{tournament.description}</p>}
         <ul className="mt-6 flex flex-wrap gap-x-4 gap-y-3">
           <HeroStat value={String(tournament.participant_count)} label={t('hero.stats.players', { count: tournament.participant_count })} />
           <HeroStat value={String(roundCount)} label={t('hero.stats.rounds', { count: roundCount })} />

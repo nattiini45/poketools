@@ -41,6 +41,12 @@ describe('LeagueHero', () => {
     expect(html).toContain('data-league-hero="plain"');
   });
 
+  it('sits on the page background: no frame, border or second surface of its own', () => {
+    const root = /<section[^>]*>/.exec(render(VIEW))?.[0] ?? '';
+    expect(root).toContain('league-hero');
+    for (const framed of ['border-hairline', 'bg-surface', 'bg-sunken', 'rounded-poke-lg']) expect(root).not.toContain(framed);
+  });
+
   it('carries the lore line of a themed world only', () => {
     expect(render(VIEW, 'sakura')).toContain('Sakura Park.');
     expect(render(VIEW, 'mountain')).toContain('Mountain Pass.');
