@@ -36,8 +36,7 @@ import { DEFAULT_ROUTE_TIMEOUT_MS, checkCall, harnessError, invokeRoute, isUnkno
 import type { BindingRegistry, DispatchContext, DispatchQuery, Outcome, QueryValue, RouteBinding, VerifyContext, VerifyResult } from '../dispatch';
 import type { AdminAgentConfig } from '../env';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
-import { ownershipRegistryVersion, proposalStorageGeneration, type AgentStorageGeneration, type ProposalStorageMode } from '../registry/ownership-version';
-import { allowsProposalSteps, isProposalStorageFrozen, type ProposalOwnershipFence } from './ownership-contract';
+import { allowsProposalSteps, isProposalStorageFrozen, ownershipRegistryVersion, proposalStorageGeneration, type AgentStorageGeneration, type ProposalOwnershipFence, type ProposalStorageMode } from './ownership-contract';
 import { isRefObject, REF_PATH_PATTERN } from '../plans/route-bodies';
 import { PLAN_OPS, type PlanOp } from '../plans/ops';
 import { UNDO_MAX_STEPS } from '../plans/undo';
@@ -804,6 +803,18 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
     }
   }
   const extra = { call, before };
+
+  if (ctx.deps.ownership) {
+    const unchanged = await ctx.deps.ownership.mode().then((mode) => mode === ctx.storageMode).catch((error: unknown) => {
+      console.error(`${logTag}: the phase storage mode could not be rechecked`, error);
+      return false;
+    });
+    if (!unchanged) {
+      const run = await settleStep(ctx, step, action, { status: 'failed', code: 'proposal_stale' });
+      auditStep(ctx, step, run);
+      return { run, stale: true };
+    }
+  }
 
   if (ctx.deps.ownership) {
     const unchanged = await ctx.deps.ownership.mode().then((mode) => mode === ctx.storageMode).catch((error: unknown) => {

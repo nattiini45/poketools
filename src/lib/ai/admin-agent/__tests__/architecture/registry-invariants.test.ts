@@ -88,14 +88,19 @@ describe('the bound routes', () => {
     for (const binding of bindings) expect(binding.method === 'DELETE' ? binding.path : '', key(binding)).toMatch(/^(\/api\/(?:seasons|tournaments)\/\[id\]\/participants|\/api\/ruleset-definitions\/\[id\])?$/); // plus the one delete of an undo: a ruleset draft created here and never published
   });
 
-  it('keep the Go-live bindings to exactly the four the plan names for phase 1, and the delete an undo may make', () => {
+  it('keep the Go-live manifest to the existing phase-1 routes plus the dormant native bracket binding', () => {
     expect(bindings.filter((b) => b.class === 'G').map(key).sort()).toEqual([
       'DELETE /api/ruleset-definitions/[id]',
       'POST /api/generate-round/[tid]',
       'POST /api/ruleset-definitions/[id]/pins',
       'POST /api/ruleset-definitions/[id]/publish',
+      'POST /api/seasons/[id]/phases/[phaseId]/generate-bracket',
       'POST /api/tournaments/[id]/generate-bracket',
     ]);
+  });
+
+  it('does not advertise the dormant native bracket route to the model', () => {
+    expect(staged.flatMap((tool) => tool.routes.map(key))).not.toContain('POST /api/seasons/[id]/phases/[phaseId]/generate-bracket');
   });
 
   it('do not reuse a name that the N list reserves for something the assistant cannot do', () => {

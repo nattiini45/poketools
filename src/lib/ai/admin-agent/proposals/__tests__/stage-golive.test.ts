@@ -5,8 +5,7 @@ vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 import { uid } from '../../plans/__tests__/fixtures';
 import { buildToolSet } from '../../registry';
 import { proposalCardSchema } from '../card';
-import { ownershipRegistryVersion, proposalStorageGeneration, type ProposalStorageMode } from '../../registry/ownership-version';
-import { type ProposalOwnershipFence } from '../ownership-contract';
+import { ownershipRegistryVersion, proposalStorageGeneration, type ProposalOwnershipFence, type ProposalStorageMode } from '../ownership-contract';
 import { createProposalStager } from '../stage';
 import { storedStepSchema } from '../steps';
 import { ADMIN, CONVERSATION_ID, DEFINITION_ID, SEASON_ID, TOURNAMENT_ID, forbidden, ledgerAction, makeHarness, seeWorkedExample } from './helpers';
@@ -26,6 +25,82 @@ const lastRow = (h: ReturnType<typeof makeHarness>) => {
   const row = h.store.proposals[h.store.proposals.length - 1];
   return { row, step: storedStepSchema.array().parse(row.steps)[0], card: proposalCardSchema.parse(row.preview) };
 };
+
+describe('staging and reopening under live phase ownership', () => {
+  function fenced(initialMode: ProposalStorageMode, standalone = false) {
+    let mode = initialMode;
+    const h = makeHarness({ source: standalone ? { phase: { seasonId: null, seasonName: null } } : {} });
+    const raw = buildToolSet({ role: 'site', maxPhase: h.config.maxPhase }).registryVersion;
+    h.conversation.tool_registry_version = ownershipRegistryVersion(raw, proposalStorageGeneration(mode));
+    h.store.see(CONVERSATION_ID, TOURNAMENT_ID);
+    const resolve = vi.fn<ProposalOwnershipFence['reader']['resolve']>(async (refs) => standalone ? refs : refs.map(() => null));
+    const readMode = vi.fn<ProposalOwnershipFence['mode']>(async () => mode);
+    const stager = createProposalStager(h.deps, { mode: readMode, reader: { resolve }, getConversation: async () => h.conversation });
+    const request = h.input('propose_start_phase', { tournament_id: TOURNAMENT_ID });
+    return { h, raw, readMode, stager, resolve, request, mode: (next: ProposalStorageMode) => { mode = next; } };
+  }
+
+  it.each([
+    ['frozen_legacy', 'phase_storage_unavailable'],
+    ['frozen_phase', 'phase_storage_unavailable'],
+    ['phase', 'tool_not_available'],
+  ] as const)('never seals a legacy phase binding while storage is %s', async (mode, code) => {
+    const { h, stager, request } = fenced(mode);
+    expect(await stager.stageProposal(request)).toMatchObject({ status: 'refused', code });
+    expect(h.store.proposals).toEqual([]);
+    expect(h.turn.stagings).toBe(0);
+  });
+
+  it('rejects an old conversation generation instead of stamping it as native', async () => {
+    const { h, stager, request, mode } = fenced('legacy');
+    mode('phase');
+    expect(await stager.stageProposal(request)).toMatchObject({ status: 'refused', code: 'proposal_stale' });
+    expect(h.store.proposals).toEqual([]);
+  });
+
+  it('refuses the insert if a freeze began before the card was written', async () => {
+    const { h, stager, request, readMode } = fenced('legacy');
+    readMode.mockResolvedValueOnce('legacy').mockResolvedValueOnce('frozen_legacy');
+    expect(await stager.stageProposal(request)).toMatchObject({ status: 'refused', code: 'proposal_stale' });
+    expect(h.store.proposals).toEqual([]);
+  });
+
+  it('keeps the reopened phase card historical and withholds its token in freeze and after activation', async () => {
+    const { h, raw, stager, request, mode, resolve } = fenced(null);
+    const result = staged(await stager.stageProposal(request));
+    const old = await stager.getCard(result.proposal_id, ADMIN);
+    expect(old).toMatchObject({ actionable: true, toolRegistryVersion: raw });
+    expect(await stager.getApprovalToken(result.proposal_id, ADMIN)).toEqual(expect.any(String));
+    expect(resolve).not.toHaveBeenCalled();
+
+    for (const next of ['frozen_legacy', 'frozen_phase', 'phase'] as const) {
+      mode(next);
+      expect(await stager.getCard(result.proposal_id, ADMIN)).toEqual({ ...old, actionable: false });
+      expect(await stager.getApprovalToken(result.proposal_id, ADMIN)).toBeNull();
+    }
+    expect(h.store.proposals[0].status).toBe('proposed');
+  });
+
+  it('does not offer Resume when reopening an executing legacy Build after activation', async () => {
+    const { h, stager, mode } = fenced(null);
+    seeWorkedExample(h);
+    const result = staged(await stager.stageProposal(h.input('propose_build', { plan_revision: 1 })));
+    Object.assign(h.store.proposals[0], { status: 'executing', approved_by: ADMIN, executing_started_at: h.deps.now().toISOString() });
+    expect((await stager.getCard(result.proposal_id, ADMIN)).resume).toMatchObject({ eligible: true });
+    mode('phase');
+    expect(await stager.getCard(result.proposal_id, ADMIN)).toMatchObject({ status: 'executing', resume: null });
+  });
+
+  it.each(['phase', 'frozen_phase', 'frozen_legacy'] as const)('stages and reopens a verified standalone tournament in %s', async (mode) => {
+    const { raw, stager, request, resolve } = fenced(mode, true);
+    const result = staged(await stager.stageProposal(request));
+    expect(resolve).toHaveBeenCalledWith([{ resource: 'competition', owner: { kind: 'tournament', tournamentId: TOURNAMENT_ID } }]);
+    expect(await stager.getCard(result.proposal_id, ADMIN)).toMatchObject({
+      actionable: true, toolRegistryVersion: ownershipRegistryVersion(raw, proposalStorageGeneration(mode)),
+    });
+    expect(await stager.getApprovalToken(result.proposal_id, ADMIN)).toEqual(expect.any(String));
+  });
+});
 
 describe('staging and reopening under live phase ownership', () => {
   function fenced(initialMode: ProposalStorageMode, standalone = false) {

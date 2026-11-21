@@ -745,6 +745,22 @@ describe('committed route manifest', () => {
     }
   });
 
+  it('pins the native bracket binding to its real auth, options, write and effect imports', () => {
+    const path = '/api/seasons/[id]/phases/[phaseId]/generate-bracket';
+    const manifest = JSON.parse(readFileSync(join(REPO_ROOT, MANIFEST_PATH), 'utf8'));
+    expect(compareDeclaredGuards([{ method: 'POST', path, guards: ['requirePlayer'] }], manifest)).toEqual([]);
+    expect(manifest.routes[`POST ${path}`]).toMatchObject({
+      expires: ['expirePhaseReads'],
+      audit: ['bracket.generate'],
+      emits: ['emitPhaseDiscordEvent(round_generated)', 'emitPhaseSocialEvent(round_generated)'],
+      imports: {
+        'src/app/api/seasons/[id]/phases/[phaseId]/rounds/_lib/scope.ts': { names: ['invalidPhaseRoundPath', 'loadRoundPhase', 'phaseRoundError'] },
+        'src/lib/tournament/generate-options.ts': { names: ['parseGenerateOptions'] },
+        'src/lib/league-phase/bracket-persistence.ts': { names: ['createNativeBracketPersistence', 'isInitialClassicPhaseBracket'] },
+      },
+    });
+  });
+
   it('names no route under an overlay root (the overlay manifest is gitignored; CI has none)', () => {
     const overlay = loadOverlay();
     if (!overlay) return;

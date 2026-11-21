@@ -60,7 +60,7 @@ export const GUARD_HELPERS = [
 ];
 
 const GUARD_SET = new Set(GUARD_HELPERS);
-const EMIT_HELPERS = new Set(['emitDiscordEvent', 'emitSocialEvent']);
+const EMIT_HELPERS = new Set(['emitDiscordEvent', 'emitSocialEvent', 'emitPhaseDiscordEvent', 'emitPhaseSocialEvent']);
 const EXPIRE_CALL = /^(?:expire|revalidate)[A-Z]/;
 const PARSE_METHODS = new Set(['parse', 'parseAsync', 'safeParse', 'safeParseAsync']);
 const CODE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/;

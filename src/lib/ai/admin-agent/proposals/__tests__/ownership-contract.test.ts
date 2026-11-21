@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { contentHash } from '@/lib/studio-core/json';
-import { ownershipRegistryVersion } from '../../registry/ownership-version';
+import { ownershipRegistryVersion } from '../ownership-contract';
 import { validateNativePlanReferences } from '../ownership-contract';
 import { workedExample, uid } from '../../plans/__tests__/fixtures';
 

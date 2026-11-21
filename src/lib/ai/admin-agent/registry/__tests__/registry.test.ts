@@ -167,8 +167,9 @@ describe('class rules of the stage-only tools', () => {
         }
       }
     }
-    // The G-bound routes are used only by G tools.
-    for (const binding of bindings.filter((b) => b.class === 'G')) {
+    // The G-bound routes are used only by G tools. The dormant native bracket binding is bound but not advertised yet.
+    const dormant = new Set(['POST /api/seasons/[id]/phases/[phaseId]/generate-bracket']);
+    for (const binding of bindings.filter((b) => b.class === 'G' && !dormant.has(routeKey(b)))) {
       const users = staged.filter((tool) => tool.routes.some((route) => routeKey(route) === routeKey(binding)));
       expect(users.length, routeKey(binding)).toBeGreaterThan(0);
       for (const user of users) expect(user.class, `${user.name} on ${routeKey(binding)}`).toBe('G');

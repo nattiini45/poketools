@@ -603,6 +603,44 @@
       },
       "packages": ["next/server"]
     },
+    "POST /api/seasons/[id]/phases/[phaseId]/generate-bracket": {
+      "file": "src/app/api/seasons/[id]/phases/[phaseId]/generate-bracket/route.ts",
+      "guards": ["requirePlayer"],
+      "schemas": [],
+      "rateLimits": [],
+      "expires": ["expirePhaseReads"],
+      "audit": ["bracket.generate"],
+      "emits": ["emitPhaseDiscordEvent(round_generated)", "emitPhaseSocialEvent(round_generated)"],
+      "importFingerprint": "6256931e09e44776",
+      "importFiles": 558,
+      "imports": {
+        "src/app/api/seasons/[id]/phases/[phaseId]/generate-bracket/kit-start.ts": { "names": ["loadNativeKitBracket"], "closure": "f77d573c544e8991", "files": 549 },
+        "src/app/api/seasons/[id]/phases/[phaseId]/rounds/_lib/scope.ts": {
+          "names": ["invalidPhaseRoundPath", "loadRoundPhase", "phaseRoundError"],
+          "closure": "0dd5a214e3b9e1ed",
+          "files": 105
+        },
+        "src/i18n/core.ts": { "names": ["createTranslator"], "closure": "1195933682b46cc8", "files": 4 },
+        "src/i18n/messages/errors/admin-assistant/index.ts": { "names": ["errorsAdminAssistant"], "closure": "bdf8bb75149e3332", "files": 4 },
+        "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
+        "src/lib/audit/agent-context.ts": { "names": ["getAgentAuditContext"], "closure": "1890b322bb61ff2c", "files": 1 },
+        "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
+        "src/lib/auth/helpers.ts": { "names": ["requirePlayer"], "closure": "c9182c1621e41838", "files": 81 },
+        "src/lib/discord/notify.ts": { "names": ["emitPhaseDiscordEvent"], "closure": "e078da65e244b364", "files": 89 },
+        "src/lib/league-phase/bracket-persistence.ts": {
+          "names": ["createNativeBracketPersistence", "isInitialClassicPhaseBracket"],
+          "closure": "3c2128d64f5c68f4",
+          "files": 17
+        },
+        "src/lib/revalidation.ts": { "names": ["expirePhaseReads"], "closure": "0dd78e925674b4fa", "files": 29 },
+        "src/lib/season/start-season.ts": { "names": ["startSeasonIfUpcoming"], "closure": "46512df70c2c5086", "files": 31 },
+        "src/lib/social/notify.ts": { "names": ["emitPhaseSocialEvent"], "closure": "fb7ae4d04094a47a", "files": 76 },
+        "src/lib/supabase/queries/league-phases.ts": { "names": ["getPhaseParticipants"], "closure": "a2390b5496c15e74", "files": 26 },
+        "src/lib/tournament/bracket-generate.ts": { "names": ["generateEliminationBracket"], "closure": "d417526d603e150f", "files": 337 },
+        "src/lib/tournament/generate-options.ts": { "names": ["parseGenerateOptions"], "closure": "e2e0b97bc0940ef0", "files": 26 }
+      },
+      "packages": ["next/server"]
+    },
     "POST /api/seasons/[id]/phases/[phaseId]/participants/sync-standings": {
       "file": "src/app/api/seasons/[id]/phases/[phaseId]/participants/sync-standings/route.ts",
       "guards": ["requireResourceAdmin"],

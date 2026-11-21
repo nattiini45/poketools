@@ -1,9 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { createTranslator } from '@/i18n/core';
+import { errorsAdminAssistant } from '@/i18n/messages/errors/admin-assistant';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { getAgentAuditContext } from '@/lib/audit/agent-context';
 import { logAuditEvent } from '@/lib/audit/log';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { emitPhaseDiscordEvent } from '@/lib/discord/notify';
-import { createNativeBracketPersistence } from '@/lib/league-phase/bracket-persistence';
+import { createNativeBracketPersistence, isInitialClassicPhaseBracket } from '@/lib/league-phase/bracket-persistence';
 import { expirePhaseReads } from '@/lib/revalidation';
 import { startSeasonIfUpcoming } from '@/lib/season/start-season';
 import { emitPhaseSocialEvent } from '@/lib/social/notify';
@@ -25,7 +28,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
     const options = await parseGenerateOptions(request);
     if (!options.ok) return options.response;
 
-    const kit = await loadNativeKitBracket(phase, season.format_type);
+    const assistantBracket = getAgentAuditContext()?.agent_tool === 'generate_phase_bracket';
+    if (assistantBracket && (options.startRound || !isInitialClassicPhaseBracket(phase, season))) {
+      throw new UserFacingError(createTranslator(errorsAdminAssistant, 'en')('proposal_stale'), { code: 'proposal_stale', status: 409 });
+    }
+
+    const kit = assistantBracket ? null : await loadNativeKitBracket(phase, season.format_type);
     if (phase.bracket_type !== 'single_elim' && phase.bracket_type !== 'double_elim') {
       throw new UserFacingError('Full bracket generation only applies to elimination formats', { code: 'bracket_generate_elim_only' });
     }
