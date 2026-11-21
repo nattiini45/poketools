@@ -816,18 +816,6 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
     }
   }
 
-  if (ctx.deps.ownership) {
-    const unchanged = await ctx.deps.ownership.mode().then((mode) => mode === ctx.storageMode).catch((error: unknown) => {
-      console.error(`${logTag}: the phase storage mode could not be rechecked`, error);
-      return false;
-    });
-    if (!unchanged) {
-      const run = await settleStep(ctx, step, action, { status: 'failed', code: 'proposal_stale' });
-      auditStep(ctx, step, run);
-      return { run, stale: true };
-    }
-  }
-
   // e. Dispatch as the verified session. `invokeRoute` never rejects. A route that takes no body is sent none.
   const outcome = await invokeRoute(
     binding,
