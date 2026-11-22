@@ -26,9 +26,12 @@ src/lib/format-pack/              PUBLIC: contract and accessors; the only impor
 ├── validate.browser.ts           browser twin: identity (keeps zod out of client bundles)
 ├── active.ts                     import raw from '@format-pack'; validate + deep-freeze
 ├── index.ts                      formatPack + accessors; every consumer imports from here
+├── quiet-hours.ts                Draft quiet-hours window validation (epb.draftClock.quietHours; SQL twin draft__cfg_quiet)
 └── __tests__/                    pack-contract.test.ts, pack-pkmn.server.test.ts
 src/lib/pack-extensions/          PUBLIC, server-only: the extension contract; the only importer of '@pack-extensions'
 ├── types.ts                      PackExtensions and the neutral supplementary shapes (the contract)
+├── format-providers.ts           The pack's format presets + rule-preset overrides; the only importer of '@pack-format-providers'
+├── historical-statistics-types.ts Historical-usage extension row and scope types
 └── index.ts                      packExtensions, loadSupplement, siteNavExtraLinks
 src/format-packs/example/         PUBLIC: the neutral example pack (contract owner)
 ├── index.ts                      default export, `satisfies FormatPack`

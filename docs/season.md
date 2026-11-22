@@ -27,7 +27,16 @@ src/lib/season/
 └── substitute.ts  # Substituting a participant: the affected matches and the apply steps
 
 src/lib/supabase/queries/seasons.ts  # Typed season/participant/core queries
-src/lib/league-trash/                # League recycle bin: constants, service, errors, lifecycle state, social-image sweep (below)
+src/lib/league-trash/                # League recycle bin (below: delete/restore/expiry flow)
+├── constants.ts                     # LEAGUE_TRASH_RETENTION_DAYS: the only place the 90-day window is stated
+├── client.ts                        # The trash page's client-side views + headlineCounts / isSchemaChanged
+├── db-error.ts                      # The RPCs' typed error signals (LEAGUE_TRASH_DB_CODES, junction blocks)
+├── errors.ts                        # toLeagueTrashError: DB signal -> UserFacingError with a catalogued code
+├── json.ts                          # Defensive readers of untyped RPC results and route bodies (pure)
+├── lifecycle-state.ts               # leagueTrashLifecycleState + leagueTrashMachine: rebuild_pending/in_bin/purgeable/expired_rebuild_pending
+├── restore-warnings.ts              # The restore warnings' codes and their one parser
+├── service.ts                       # trashLeague around the RPCs (deadline, read-back, audit); server only
+└── social-image-sweep.ts            # Removes a purged league's match cards from the social-images bucket
 
 src/app/api/seasons/                 # Route tree (see API Routes)
 ```
@@ -45,7 +54,7 @@ src/app/api/seasons/                 # Route tree (see API Routes)
 - **`isSeasonStarted(signals)`** — `season-state.ts` (also exported from `season-started.ts`) — true when the status is `active` or `completed`, any phase has left `upcoming`, or any phase has a round. Participants and draft pools do not count. Gates attach, detach and the type switch; the SQL function `format_season_started` applies the same rule inside the attach and detach transactions.
 - **`resolveSeasonEngine(season, attached?)`** — `season-engine.ts` — `legacy:<format_type>` for every league, `kit` only for a `custom` league whose attached format has `engine = 'kit'`. `season_formats.engine` is `kit` for a league attached after the engine release and `legacy` for one attached before it (`20261104100100`, which also moves the league-trash snapshots of such a league to `legacy`); an admin moves a league between `legacy`, `shadow` and `kit` with `PUT /api/seasons/[id]/format/engine`. The standings dispatcher, the round generators, advancement and the match hooks branch on it ([Format Kit](./format-kit.md#format-engine-and-runtime)).
 - **`EPB_DEFAULT_RULES` / `initializeEpbFormatRules(seasonId)`** — `format-rules-defaults.ts` — default EPB ruleset (budget, picks, token ratio and caps, bans, Tera, tiebreakers from the active format pack's `epb.defaults`; `docs/format-packs.md`) upserted on EPB season creation.
-- **`pointBuyBattleRulesetInput()` / `ensurePointBuyBattleRuleset(createdBy)`** — `point-buy-battle-ruleset.ts` — the Gen 9 singles, non-custom ruleset a point-buy league uses, built from the active format pack; ensure reuses the head of the oldest usable ruleset with the pack's name (a head with bans publishes a NEW version without them: leagues keep the version they pin) or creates one through the Ruleset Studio bridge, and the league pins its head version ([Evolution Point Buy](./evolution-point-buy.md#league-type--battle-ruleset), [Ruleset Studio](./ruleset-studio.md)).
+- **`pointBuyBattleRulesetInput()` / `ensurePointBuyBattleRuleset(createdBy)`** — `point-buy-battle-ruleset.ts` — the Gen 9 singles, non-custom ruleset a point-buy league uses, built from the active format pack; ensure reuses the head of the oldest usable ruleset with the pack's name (a head with bans publishes a NEW version without them: leagues keep the version they pin) or creates one through the Ruleset Studio bridge, and the league pins its head version ([Evolution Point Buy](./evolution-point-buy.md#league-type-battle-ruleset), [Ruleset Studio](./ruleset-studio.md)).
 - **Query layer** — `src/lib/supabase/queries/seasons.ts` — `listSeasons`, `listArchivedSeasons`, `listSeasonsByIds`, `listAllSeasonIds`, `getSeasonById`, `getSeasonWithDetails`, `createSeason`, `updateSeason`, `deleteSeason` (only the primitive that rolls back a failed league clone; a league DELETE goes through `moveLeagueToTrash` in `queries/league-trash.ts`), `getSeasonsByPlayer`; participants (`getSeasonParticipants`, `addSeasonParticipant`, `getSeasonParticipantRow`, `swapSeasonParticipant`, `updateParticipantGymType`; removal is `removeLeagueParticipant` in `season-groups.ts`, the `season_participant_remove` RPC); cores (`getCorePool`, `setCorePool`, `updateParticipantCoreTypes`, `getParticipantCore`, `setParticipantCores`).
 
 ## Data Flows
