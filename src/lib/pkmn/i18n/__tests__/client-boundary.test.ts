@@ -112,6 +112,12 @@ describe('client boundary: use-client modules', { timeout: FILE_WALK_TIMEOUT_MS 
     });
   });
 
+  it('the NavBar reaches no *.de.json name map (issue #140: the settings preview resolves server-side)', () => {
+    const nav = reachableGraph(path.join(SRC_ROOT, 'components/shared/NavBar.tsx'));
+    const maps = [...nav.files].filter((f) => f.endsWith('.de.json'));
+    expect(maps.map((f) => importChain(nav, f))).toEqual([]);
+  });
+
   it('PkmnName reaches the five name maps and nothing server-only', () => {
     const own = reachableGraph(path.join(SRC_ROOT, 'components/shared/PkmnName.tsx'));
     const maps = [...own.files].filter((f) => f.endsWith('.json')).map((f) => path.basename(f)).sort();

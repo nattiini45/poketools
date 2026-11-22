@@ -80,6 +80,9 @@ export interface WikiAbilityEntry {
 
 export interface WikiSearchResult {
   type: WikiEntityType;
+  /** Canonical English name (URL-safe, storage form). */
   name: string;
+  /** Display name localized to the viewer's data locale; set by `/api/wiki/search`. */
+  label?: string;
   shortDesc: string;
 }

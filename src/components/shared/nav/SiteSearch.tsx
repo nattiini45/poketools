@@ -16,13 +16,12 @@ import {
 } from '@/components/ui/fluid/command-menu';
 import ItemIcon from '@/components/ui/ItemIcon';
 import { FOCUS_RING } from '@/components/ui/panel';
-import { getWikiPath, RESULT_KIND } from '@/components/wiki/WikiSearchBar';
-import { useDataLocale, useT } from '@/i18n/client';
+import { getWikiPath, resultLabel } from '@/lib/wiki/search-result';
+import { useT } from '@/i18n/client';
 import { navMessages } from '@/i18n/messages/nav';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import type { IconComponent } from '@/lib/fluid/icon-context';
 import type { ItemIconId } from '@/lib/pkmn/item-icons';
-import { localizeName } from '@/lib/pkmn/i18n/names';
 import type { WikiSearchResult } from '@/types/wiki';
 import { ALL_NAV_LINKS, extensionLinkIcon } from './links';
 
@@ -57,7 +56,7 @@ export default function SiteSearch({
 }) {
   const t = useT(navMessages);
   const tWiki = useT(wikiMessages);
-  const dataLocale = useDataLocale();
+
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -100,7 +99,7 @@ export default function SiteSearch({
     if (term.length < 2) return pages;
     const wiki = answer.map((result) => ({
       value: `wiki:${result.type}:${result.name}`,
-      label: localizeName(RESULT_KIND[result.type], result.name, dataLocale),
+      label: resultLabel(result),
       description: tWiki(`search.kind.${result.type}`),
       icon: WIKI_ICON,
       group: t('search.wiki'),
@@ -112,7 +111,7 @@ export default function SiteSearch({
       { value: 'find:replays', label: t('search.inReplays', { query: term }), icon: REPLAYS_ICON, href: `/replays?q=${encoded}` },
     ].map(({ href, ...row }) => ({ ...row, group: t('search.elsewhere', { query: term }), onSelect: () => router.push(href) }));
     return [...pages, ...wiki, ...elsewhere];
-  }, [answer, dataLocale, extraLinks, router, signedIn, t, tWiki, term]);
+  }, [answer, extraLinks, router, signedIn, t, tWiki, term]);
 
   return (
     <>
