@@ -176,6 +176,7 @@ export default {
   challenge_expired: 'The time to answer this challenge has run out.',
   challenge_player_not_enrolled: 'One of the two players is no longer part of this phase, so the challenge was cancelled.',
   challenge_not_ladder: 'This phase is not a challenge ladder.',
+  challenge_pair_in_round: 'This pairing already has a match in the open round.',
   // The league's engine is not the kit (an admin switched it): a challenge can neither be made nor accepted until it is back (409).
   challenge_ladder_inactive: 'The challenge ladder of this league is not running at the moment, so challenges cannot be made or accepted. You can still decline or withdraw one.',
 

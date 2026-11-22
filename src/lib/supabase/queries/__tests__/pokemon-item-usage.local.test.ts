@@ -12,7 +12,7 @@ describe.skipIf(!optIn)('species item usage on the disposable phase stack', () =
   const [player, opponent, testPlayer] = Array.from({ length: 3 }, randomUUID);
   const [league, testLeague] = Array.from({ length: 2 }, randomUUID);
   const [phase, testPhase] = Array.from({ length: 2 }, randomUUID);
-  const [round, testRound] = Array.from({ length: 2 }, randomUUID);
+  const [round, round2, testRound] = Array.from({ length: 3 }, randomUUID);
   const [completed, scheduled, testOpponentMatch, testLeagueMatch] = Array.from({ length: 4 }, randomUUID);
   const [standalone, retired] = Array.from({ length: 2 }, randomUUID);
   const [standaloneMatch, legacyTestMatch, retiredMatch] = Array.from({ length: 3 }, randomUUID);
@@ -33,7 +33,7 @@ describe.skipIf(!optIn)('species item usage on the disposable phase stack', () =
     await run(admin.from('teams').delete().eq('player_id', player));
     await run(admin.from('phase_matches').delete().in('id', [completed, scheduled, testOpponentMatch, testLeagueMatch]));
     await run(admin.from('phase_teams').delete().in('phase_id', [phase, testPhase]));
-    await run(admin.from('phase_rounds').delete().in('id', [round, testRound]));
+    await run(admin.from('phase_rounds').delete().in('id', [round, round2, testRound]));
     await run(admin.from('league_phases').delete().in('id', [phase, testPhase]));
     await run(admin.from('tournaments').delete().in('id', [standalone, retired]));
     await run(admin.from('seasons').delete().in('id', [league, testLeague]));
@@ -64,11 +64,13 @@ describe.skipIf(!optIn)('species item usage on the disposable phase stack', () =
     ]));
     await run(client.from('phase_rounds').insert([
       { id: round, phase_id: phase, name: 'Round 1', round_number: 1, best_of: 1 },
+      { id: round2, phase_id: phase, name: 'Round 2', round_number: 2, best_of: 1 },
       { id: testRound, phase_id: testPhase, name: 'Round 1', round_number: 1, best_of: 1 },
     ]));
     await run(client.from('phase_matches').insert([
       { id: completed, phase_id: phase, round_id: round, player_1_id: player, player_2_id: opponent, status: 'completed' },
-      { id: scheduled, phase_id: phase, round_id: round, player_1_id: player, player_2_id: opponent, status: 'scheduled' },
+      // One pairing meets once per round (phase_matches_round_pair_unique): the scheduled repeat sits in round 2.
+      { id: scheduled, phase_id: phase, round_id: round2, player_1_id: player, player_2_id: opponent, status: 'scheduled' },
       { id: testOpponentMatch, phase_id: phase, round_id: round, player_1_id: player, player_2_id: testPlayer, status: 'completed' },
       { id: testLeagueMatch, phase_id: testPhase, round_id: testRound, player_1_id: player, player_2_id: opponent, status: 'completed' },
     ]));

@@ -188,9 +188,12 @@ describe.skipIf(!optedIn)('phase teams on the disposable CI database', () => {
     const firstRelease = randomUUID();
     const firstMatch = randomUUID();
     try {
-      await ok(`${insert('phase_teams', planned, null)} ${insert('phase_teams', collision, randomUUID(), matchId)} ${insert('teams', collision, null)}
+      // phase_matches_round_pair_unique seats a pairing once per round: `firstMatch` goes into a second round.
+      const firstRound = randomUUID();
+      await ok(`INSERT INTO public.phase_rounds (id,phase_id,name,round_number,best_of) VALUES ('${firstRound}','${phaseId}','Round 2',2,3);
+        ${insert('phase_teams', planned, null)} ${insert('phase_teams', collision, randomUUID(), matchId)} ${insert('teams', collision, null)}
         INSERT INTO public.phase_matches (id,phase_id,round_id,player_1_id,player_2_id)
-          VALUES ('${firstMatch}','${phaseId}','${roundId}','${players[0]}','${players[1]}');
+          VALUES ('${firstMatch}','${phaseId}','${firstRound}','${players[0]}','${players[1]}');
         INSERT INTO public.phase_teams (id,phase_id,player_id,match_id)
           VALUES ('${firstRelease}','${phaseId}','${players[1]}','${firstMatch}');`);
       const result = await sql(`SET ROLE service_role; SELECT public.phase_teams_release_matches(ARRAY['${firstMatch}','${matchId}']::uuid[]);`);

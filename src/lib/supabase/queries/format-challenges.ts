@@ -22,7 +22,9 @@ import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { parseDbError } from '@/lib/studio-core/db-errors';
 import { isValidUuid } from '@/lib/utils/uuid';
+import { isUniqueViolationOf } from '../unique-violation';
 import { mapFormatRuntimeDbError } from './format-runtime';
+import { MATCHES_ROUND_PAIR_UNIQUE } from './rounds';
 
 export type FormatChallengeRow = Omit<Tables<'format_challenges'>, 'league_phase_id' | 'phase_match_id'>;
 export type FormatChallengeStatus = 'open' | 'accepted' | 'declined' | 'expired' | 'cancelled';
@@ -45,6 +47,7 @@ export const FORMAT_CHALLENGE_ERROR_CODES = [
   'challenge_expired',
   'challenge_player_not_enrolled',
   'challenge_not_ladder',
+  'challenge_pair_in_round',
 ] as const;
 export type FormatChallengeErrorCode = (typeof FORMAT_CHALLENGE_ERROR_CODES)[number];
 
@@ -66,6 +69,7 @@ const FORMAT_CHALLENGE_ERROR_STATUS: { readonly [C in FormatChallengeErrorCode]:
   challenge_expired: 409,
   challenge_player_not_enrolled: 409,
   challenge_not_ladder: 409,
+  challenge_pair_in_round: 409,
 };
 
 /** A refusal of the challenge functions that the viewer can act on; `safeErrorResponse` passes its code and text. */
@@ -87,6 +91,11 @@ export function mapFormatChallengeDbError(error: unknown): unknown {
   const signal = parseDbError(error);
   if (signal?.code === 'P0001' && signal.message !== undefined && isChallengeCode(signal.message)) {
     return new FormatChallengeError(signal.message);
+  }
+  // The accepted pair already holds a match in the open round: the same-pair unique index of issue #131
+  // (`matches_round_pair_unique`, bracket matches excepted) refused the insert, so no match exists.
+  if (isUniqueViolationOf(error, MATCHES_ROUND_PAIR_UNIQUE)) {
+    return new FormatChallengeError('challenge_pair_in_round');
   }
   return mapFormatRuntimeDbError(error);
 }

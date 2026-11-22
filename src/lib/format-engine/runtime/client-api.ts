@@ -156,6 +156,7 @@ const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorK
   challenge_already_open: 'conflict',
   challenge_cooldown: 'conflict',
   challenge_not_ladder: 'conflict',
+  challenge_pair_in_round: 'conflict',
   format_check_not_open: 'conflict',
   format_not_running: 'conflict',
   format_action_already_submitted: 'conflict',

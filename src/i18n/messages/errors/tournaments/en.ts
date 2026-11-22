@@ -85,6 +85,7 @@ export default {
     other: 'This round has {count} pairings that the phase filter rejects: no other pairings were possible, or they were dropped from the schedule.',
   },
   rounds_round_already_written: '{round} already exists with its matches. Delete it to generate it again.',
+  rounds_pair_already_in_round: '{round} already holds a match for one of these pairings. Nothing was written.',
   round_matches_unfinished: {
     one: '{round} still has {count} unfinished match. Finish it, or complete the round anyway with a reason.',
     other: '{round} still has {count} unfinished matches. Finish them, or complete the round anyway with a reason.',

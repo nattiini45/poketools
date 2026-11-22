@@ -88,10 +88,20 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
     return `INSERT INTO public.${table}(id,match_id,game_number,replay_hash) VALUES ('${id}','${matchId}',${number},${hash === null ? 'NULL' : `'${hash}'`});`;
   }
 
-  async function schedulingMatch() {
+  // phase_matches_round_pair_unique seats a pairing once per round: a fixture match beyond `phaseMatch` takes a round of its own.
+  async function freshPhaseRound() {
+    const id = randomUUID();
+    const { count } = await admin.from('phase_rounds').select('id', { count: 'exact', head: true }).eq('phase_id', phaseId);
+    expect((await admin.from('phase_rounds').insert({
+      id, phase_id: phaseId, name: `Round ${(count ?? 0) + 1}`, round_number: (count ?? 0) + 1, best_of: 3,
+    })).error).toBeNull();
+    return id;
+  }
+
+  async function schedulingMatch(roundId?: string) {
     const id = randomUUID();
     expect((await admin.from('phase_matches').insert({
-      id, round_id: phaseRound, phase_id: phaseId, player_1_id: players[0], player_2_id: players[1],
+      id, round_id: roundId ?? await freshPhaseRound(), phase_id: phaseId, player_1_id: players[0], player_2_id: players[1],
     })).error).toBeNull();
     return id;
   }
@@ -274,9 +284,12 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
       const target = randomUUID();
       const untouched = randomUUID();
       const gameId = randomUUID();
-      expect((await admin.from('phase_matches').insert([target, untouched].map((id) => ({
-        id, phase_id: phaseId, round_id: phaseRound, player_1_id: players[0], player_2_id: players[1],
-      })))).error).toBeNull();
+      const [targetRound, untouchedRound] = [await freshPhaseRound(), await freshPhaseRound()];
+      expect((await admin.from('phase_matches').insert(
+        [[target, targetRound], [untouched, untouchedRound]].map(([id, roundId]) => ({
+          id, phase_id: phaseId, round_id: roundId, player_1_id: players[0], player_2_id: players[1],
+        })),
+      )).error).toBeNull();
       const writer = session();
       const deleter = session();
       const name = `delete-${target}`;
@@ -316,7 +329,7 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
 
   it('deletes a scheduled game-free batch atomically and tolerates already missing ids', async () => {
     const target = randomUUID();
-    expect((await admin.from('phase_matches').insert({ id: target, phase_id: phaseId, round_id: phaseRound, player_1_id: players[0], player_2_id: players[1] })).error).toBeNull();
+    expect((await admin.from('phase_matches').insert({ id: target, phase_id: phaseId, round_id: await freshPhaseRound(), player_1_id: players[0], player_2_id: players[1] })).error).toBeNull();
     const result = await sql(`SELECT public.phase_matches_delete_scheduled(ARRAY['${target}'::uuid,'${randomUUID()}'::uuid]);`);
     expect(result.code).toBe(0);
     expect(result.output.trim()).toBe('1');

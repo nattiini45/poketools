@@ -40,7 +40,7 @@ const ids = {
   p1: randomUUID(),
   p2: randomUUID(),
   tournament: randomUUID(),
-  round: randomUUID(),
+  rounds: [randomUUID(), randomUUID(), randomUUID()],
   matches: [randomUUID(), randomUUID(), randomUUID()],
   games: [randomUUID(), randomUUID(), randomUUID()],
 };
@@ -88,14 +88,17 @@ describe.skipIf(!optIn)('streaks_replace_player: fence and concurrent finalizes 
     );
     await run(
       'rounds',
-      client.from('rounds').insert({ id: ids.round, tournament_id: ids.tournament, name: 'Round 1', round_number: 1, best_of: 1 }),
+      client.from('rounds').insert(
+        ids.rounds.map((id, i) => ({ id, tournament_id: ids.tournament, name: `Round ${i + 1}`, round_number: i + 1, best_of: 1 })),
+      ),
     );
     await run(
       'matches',
       client.from('matches').insert(
+        // One pairing meets once per round (matches_round_pair_unique): each seeded match sits in its own round.
         ids.matches.map((id, i) => ({
           id,
-          round_id: ids.round,
+          round_id: ids.rounds[i],
           tournament_id: ids.tournament,
           player_1_id: ids.p1,
           player_2_id: ids.p2,
@@ -139,7 +142,7 @@ describe.skipIf(!optIn)('streaks_replace_player: fence and concurrent finalizes 
     await del('battle_stats', client.from('battle_stats').delete().in('game_id', ids.games));
     await del('games', client.from('games').delete().in('id', ids.games));
     await del('matches', client.from('matches').delete().in('id', ids.matches));
-    await del('rounds', client.from('rounds').delete().eq('id', ids.round));
+    await del('rounds', client.from('rounds').delete().eq('tournament_id', ids.tournament));
     await del('tournaments', client.from('tournaments').delete().eq('id', ids.tournament));
     await del('rulesets', deleteLocalRuleset(client, ids.ruleset));
     await del('players', client.from('players').delete().in('id', [ids.p1, ids.p2]));

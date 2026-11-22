@@ -59,6 +59,21 @@ const ids = {
   match: randomUUID(),
 };
 
+// matches_round_pair_unique seats one pairing once per round: every extra match in this fixture gets a round of its own.
+let nextRoundNumber = 2;
+const extraRounds = async (client: ClientMod['supabase'], count: number) => {
+  const roundIds = Array.from({ length: count }, () => randomUUID());
+  const { error } = await client.from('rounds').insert(
+    roundIds.map((id) => {
+      const n = nextRoundNumber;
+      nextRoundNumber += 1;
+      return { id, tournament_id: ids.tournament, name: `Round ${n}`, round_number: n, best_of: 1 };
+    }),
+  );
+  if (error) throw new Error(`[seed rounds] ${JSON.stringify(error)}`);
+  return roundIds;
+};
+
 describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
   beforeAll(async () => {
     assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
@@ -116,7 +131,7 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
     }
     // rating_history and player_ratings rows go with their matches and players (ON DELETE CASCADE).
     await del('matches', client.from('matches').delete().eq('tournament_id', ids.tournament));
-    await del('rounds', client.from('rounds').delete().eq('id', ids.round));
+    await del('rounds', client.from('rounds').delete().eq('tournament_id', ids.tournament));
     await del('tournaments', client.from('tournaments').delete().eq('id', ids.tournament));
     await del('rulesets', deleteLocalRuleset(client, ids.ruleset));
     await del('players', client.from('players').delete().in('id', [ids.p1, ids.p2]));
@@ -223,9 +238,10 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
 
   it('pages the finalize worklist with the keyset cursor: every row once, oldest first (CR-2)', async () => {
     const extra = Array.from({ length: 5 }, () => randomUUID());
+    const extraRoundIds = await extraRounds(client, extra.length);
     const { error } = await client.from('matches').insert(
-      extra.map((id) => ({
-        id, round_id: ids.round, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
+      extra.map((id, i) => ({
+        id, round_id: extraRoundIds[i], tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
         status: 'completed' as const, winner_id: ids.p1,
       })),
     );
@@ -253,13 +269,14 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
   it('reads more than 1000 completed matches for the rating replay with the keyset cursor, dated first (CR-4)', async () => {
     // 1003 dated matches (pairs share a date_played to exercise the created_at / id tie-breaks) and 2 undated ones.
     const base = Date.parse('2026-01-01T00:00:00.000Z');
+    const replayRoundIds = await extraRounds(client, 1005);
     const dated = Array.from({ length: 1003 }, (_, i) => ({
-      id: randomUUID(), round_id: ids.round, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
+      id: randomUUID(), round_id: replayRoundIds[i], tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
       status: 'completed' as const, winner_id: i % 2 === 0 ? ids.p1 : ids.p2,
       date_played: new Date(base + Math.floor(i / 2) * 60_000).toISOString(),
     }));
-    const undated = Array.from({ length: 2 }, () => ({
-      id: randomUUID(), round_id: ids.round, tournament_id: ids.tournament, player_1_id: ids.p2, player_2_id: ids.p1,
+    const undated = Array.from({ length: 2 }, (_, i) => ({
+      id: randomUUID(), round_id: replayRoundIds[1003 + i], tournament_id: ids.tournament, player_1_id: ids.p2, player_2_id: ids.p1,
       status: 'completed' as const, winner_id: ids.p2, date_played: null,
     }));
     const { error } = await client.from('matches').insert([...dated, ...undated]);
@@ -291,8 +308,9 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
 
   it('writes the live rating update as one statement per table, and refuses a bad pair whole (CR-4)', async () => {
     const ratedMatch = randomUUID();
+    const [ratedRound, otherRound] = await extraRounds(client, 2);
     const { error } = await client.from('matches').insert({
-      id: ratedMatch, round_id: ids.round, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
+      id: ratedMatch, round_id: ratedRound, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
       status: 'completed', winner_id: ids.p1,
     });
     expect(error).toBeNull();
@@ -309,7 +327,7 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
     // One bad history row refuses the whole apply: no ratings, no one-sided history.
     const otherMatch = randomUUID();
     const { error: insertError } = await client.from('matches').insert({
-      id: otherMatch, round_id: ids.round, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
+      id: otherMatch, round_id: otherRound, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2,
       status: 'completed', winner_id: ids.p2,
     });
     expect(insertError).toBeNull();
