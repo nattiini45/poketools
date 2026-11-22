@@ -182,6 +182,12 @@ describe('MatchPrepPage', () => {
     expect(mocks.getMatchPrepTeam).not.toHaveBeenCalled();
   });
 
+  it('redirects a signed-in identity without a player to the dashboard (#142)', async () => {
+    mocks.getLiveAccess.mockResolvedValueOnce({ player: null });
+    await expect(MatchPrepPage(params(MATCH_ID))).rejects.toThrow('NEXT_REDIRECT /dashboard');
+    expect(mocks.resolveIdOnlyMatchRoute).not.toHaveBeenCalled();
+  });
+
   it('rejects a changed owner or lapsed enrollment before loading private data', async () => {
     nativePage();
     mocks.getPhaseMatchById.mockResolvedValueOnce({ ...NATIVE_MATCH, phase_id: 'wrong' });

@@ -312,9 +312,9 @@ describe('submit page error paths (no masking)', () => {
     await expect(render()).rejects.toThrow('REDIRECT /');
   });
 
-  it('redirects a signed-in identity without a player home', async () => {
+  it('redirects a signed-in identity without a player to the dashboard (#142)', async () => {
     mocks.access = { player: null, isSiteAdmin: false, isAnyAdmin: false, isCreator: false };
-    await expect(render()).rejects.toThrow('REDIRECT /');
+    await expect(render()).rejects.toThrow('REDIRECT /dashboard');
   });
 
   it('is a 404 for an unknown match', async () => {

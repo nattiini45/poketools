@@ -10,6 +10,7 @@ import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { getLiveAccess } from '@/lib/auth/helpers';
+import { redirectUnregisteredPlayerToDashboard } from '@/lib/auth/redirect-to-sign-in';
 import { resolveIdOnlyTeamRoute } from '@/lib/league-phase/team-route-owner';
 import { isValidUuid } from '@/lib/utils/uuid';
 
@@ -26,7 +27,8 @@ export default async function DashboardTeamPage({ params }: PageProps) {
   // up-to-5-minutes-stale session copy): a revoked admin loses access at once.
   const access = await getLiveAccess();
   const player = access?.player;
-  if (!access || !player) redirect('/');
+  if (!access) redirect('/');
+  if (!player) redirectUnregisteredPlayerToDashboard();
 
   // A malformed id names no team (the uuid filter would fail as a 500).
   if (!isValidUuid(tid)) notFound();

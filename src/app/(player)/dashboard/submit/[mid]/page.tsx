@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import { getLiveAccess } from '@/lib/auth/helpers';
+import { redirectUnregisteredPlayerToDashboard } from '@/lib/auth/redirect-to-sign-in';
 import { canAdministerMatchAccess } from '@/lib/auth/match-access';
 import { canAdministerPhaseAccess } from '@/lib/auth/phase-access';
 import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
@@ -35,7 +36,8 @@ export default async function SubmitResultPage({ params }: PageProps) {
   // Live roles (AGENTS.md): this page decides who sees which planned roster.
   const access = await getLiveAccess();
   const player = access?.player;
-  if (!access || !player) redirect('/');
+  if (!access) redirect('/');
+  if (!player) redirectUnregisteredPlayerToDashboard();
   if (!access.isSiteAdmin && (player.status === 'banned' || player.status === 'suspended')) redirect('/dashboard');
   const owner = await resolveIdOnlyMatchRoute(mid.toLowerCase());
   if (!owner) notFound();
