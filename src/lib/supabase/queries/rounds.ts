@@ -207,8 +207,9 @@ function mapRoundWriteError(error: { code?: string; message?: string }, roundNam
     return new RoundAlreadyWrittenError(roundName);
   }
   // Two pairings of one match plan, or a pairing another writer already put in the round (issue #131).
+  // No roundName in the log line: it is caller input (CodeQL js/log-injection, js/tainted-format-string).
   if (isUniqueViolationOf(error, MATCHES_ROUND_PAIR_UNIQUE)) {
-    console.error(`[${tag}] a pairing of round "${roundName}" already holds a match (concurrent generation)`, error);
+    console.error(`[${tag}] a pairing already holds a match in the round (concurrent generation)`, error);
     return new UserFacingError(`${roundName} already holds a match for one of these pairings. Nothing was written.`, {
       code: 'rounds_pair_already_in_round',
       params: { round: roundName },
