@@ -298,10 +298,10 @@
       "expires": ["expireTournamentReads"],
       "audit": ["round.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitDiscordEvent(tournament_started)", "emitSocialEvent(round_generated)", "emitSocialEvent(tournament_started)"],
-      "importFingerprint": "4c4d45ef7802ab14",
-      "importFiles": 436,
+      "importFingerprint": "989fa8617be7f8ab",
+      "importFiles": 437,
       "imports": {
-        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "83cd1ccfb21bc070", "files": 228 },
+        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "99e339821401395c", "files": 229 },
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
         "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
@@ -611,10 +611,10 @@
       "expires": ["expirePhaseReads"],
       "audit": ["bracket.generate"],
       "emits": ["emitPhaseDiscordEvent(round_generated)", "emitPhaseSocialEvent(round_generated)"],
-      "importFingerprint": "e9ad45012ef3ae93",
-      "importFiles": 560,
+      "importFingerprint": "7ef7d789416d7a37",
+      "importFiles": 561,
       "imports": {
-        "src/app/api/seasons/[id]/phases/[phaseId]/generate-bracket/kit-start.ts": { "names": ["loadNativeKitBracket"], "closure": "cfecda1267a3d56d", "files": 551 },
+        "src/app/api/seasons/[id]/phases/[phaseId]/generate-bracket/kit-start.ts": { "names": ["loadNativeKitBracket"], "closure": "e005693043fed34a", "files": 552 },
         "src/app/api/seasons/[id]/phases/[phaseId]/rounds/_lib/scope.ts": {
           "names": ["invalidPhaseRoundPath", "loadRoundPhase", "phaseRoundError"],
           "closure": "5f1188ab3672328d",
