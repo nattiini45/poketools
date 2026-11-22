@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { lookupPath } from '@/i18n/core';
 import { formatStudioMessages } from '@/i18n/messages/format-studio';
@@ -33,6 +35,14 @@ describe('diagnostic vocabulary', () => {
     expect(DIAGNOSTIC_CODES).toHaveLength(102);
     expect(new Set(DIAGNOSTIC_CODES).size).toBe(DIAGNOSTIC_CODES.length);
     expect(DIAGNOSTIC_SEVERITY.size).toBe(102);
+  });
+
+  it('is quoted by the docs with the catalogue size', () => {
+    const PRE_PHASE_3_CODES = 59; // the codes the compiler had before the Phase 3 sections were added
+    const doc = (name: string) => readFileSync(path.join(process.cwd(), 'docs', name), 'utf8');
+    expect(doc('format-kit.md')).toContain(`reports ${DIAGNOSTIC_CODES.length} codes in all`);
+    expect(doc('format-kit.md')).toContain(`The ${DIAGNOSTIC_CODES.length - PRE_PHASE_3_CODES} added since`);
+    expect(doc('modules-index.md')).toContain(`${DIAGNOSTIC_CODES.length} diagnostic codes`);
   });
 
   it('has at least one negative fixture for every code, and none for an unknown code', () => {
