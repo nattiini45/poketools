@@ -5,7 +5,7 @@ The vendored [Fluid Functionalism](https://www.fluidfunctionalism.com) registry'
 ## File Structure
 
 ```
-src/lib/fluid/                     Vendored Fluid support modules (tokens, contexts, motion)
+src/lib/fluid/                     Vendored Fluid support modules; entries name key exports
 ├── type-scale.ts                 typeStyles/typeScale/typeScaleRoles + typeClass/fieldTouchClass text classes
 ├── font-weight.ts                fontWeights scale tokens
 ├── shape-context.tsx             ShapeProvider/useShape/usePopupShape/shapeMap/nestedRadius: corner radii hierarchy
@@ -15,7 +15,7 @@ src/lib/fluid/                     Vendored Fluid support modules (tokens, conte
 ├── elevated.tsx                  Elevated: the raised-surface wrapper component
 ├── springs.ts                    spring (fast/…, critically damped) + exitFallbackMs motion constants
 ├── popup.ts                      popupMotionClass/popupScrollAreaClass/popupViewportClass + POPUP_NAV_KEYS
-├── icon-context.tsx              IconComponent/IconName/defaultIcons: the shared icon registry (icon-context)
+├── icon-context.tsx              IconComponent/IconName/defaultIcons: the shared icon registry
 └── omit.ts                       omit(): object-key filtering helper
 ```
 
