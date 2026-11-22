@@ -17,7 +17,7 @@ import {
 import ItemIcon from '@/components/ui/ItemIcon';
 import { FOCUS_RING } from '@/components/ui/panel';
 import { getWikiPath, resultLabel } from '@/lib/wiki/search-result';
-import { useT } from '@/i18n/client';
+import { useDataLocale, useT } from '@/i18n/client';
 import { navMessages } from '@/i18n/messages/nav';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import type { IconComponent } from '@/lib/fluid/icon-context';
@@ -58,6 +58,7 @@ export default function SiteSearch({
   const tWiki = useT(wikiMessages);
 
   const router = useRouter();
+  const dataLocale = useDataLocale();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const term = query.trim();
@@ -68,7 +69,9 @@ export default function SiteSearch({
     const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/wiki/search?q=${encodeURIComponent(term)}`, { signal: controller.signal });
+        // `lang=` keeps the response's CDN cache key per-locale (the API answers CACHE.NONE without it)
+        // and a language switch refetches the open dropdown's labels.
+        const res = await fetch(`/api/wiki/search?q=${encodeURIComponent(term)}&lang=${dataLocale}`, { signal: controller.signal });
         const json = (await res.json()) as { success: boolean; data?: WikiSearchResult[] };
         if (json.success && json.data) setAnswer(json.data);
       } catch {
@@ -79,7 +82,7 @@ export default function SiteSearch({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [open, term]);
+  }, [open, term, dataLocale]);
 
   const items = useMemo<CommandMenuItemData[]>(() => {
     const pages = [

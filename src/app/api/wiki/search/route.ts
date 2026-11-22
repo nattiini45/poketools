@@ -5,6 +5,7 @@ import { localizeName } from '@/lib/pkmn/i18n/names';
 import { rankedSearch } from '@/lib/pkmn/i18n/search';
 import { RESULT_KIND } from '@/lib/wiki/search-result';
 import { getRequestDataLocale } from '@/i18n/server';
+import { isLocale } from '@/i18n/config';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { CACHE } from '@/lib/api/cache';
 import type { ApiResult } from '@/types/api';
@@ -26,14 +27,20 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q');
     const typeFilter = searchParams.get('type') as WikiEntityType | null;
 
+    // `?lang=` pins the localized body to the URL so the shared CDN cache never serves one viewer's
+    // locale to another; without it the cookie-derived body is private and must not be cached.
+    const rawLang = searchParams.get('lang');
+    const explicitLang = isLocale(rawLang) ? rawLang : null;
+    const headers = explicitLang ? CACHE.HOUR : CACHE.NONE;
+
     if (!query || query.length < 2) {
       return NextResponse.json<ApiResult<WikiSearchResult[]>>(
         { success: true, data: [] },
-        { headers: CACHE.HOUR },
+        { headers },
       );
     }
 
-    const dataLocale = getRequestDataLocale(request);
+    const dataLocale = explicitLang ?? getRequestDataLocale(request);
     const entry = (type: WikiEntityType, name: string): WikiSearchResult => ({
       type,
       name,
@@ -83,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json<ApiResult<WikiSearchResult[]>>(
       { success: true, data: results.slice(0, MAX_RESULTS) },
-      { headers: CACHE.HOUR },
+      { headers },
     );
   } catch (err) {
     return safeErrorResponse(err, 'Failed to search the wiki');

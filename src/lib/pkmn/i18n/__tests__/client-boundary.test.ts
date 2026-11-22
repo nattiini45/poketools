@@ -118,6 +118,12 @@ describe('client boundary: use-client modules', { timeout: FILE_WALK_TIMEOUT_MS 
     expect(maps.map((f) => importChain(nav, f))).toEqual([]);
   });
 
+  it('WikiSearchBar stays map-free too: it renders the API-localized label', () => {
+    const bar = reachableGraph(path.join(SRC_ROOT, 'components/wiki/WikiSearchBar.tsx'));
+    const maps = [...bar.files].filter((f) => f.endsWith('.de.json'));
+    expect(maps.map((f) => importChain(bar, f))).toEqual([]);
+  });
+
   it('PkmnName reaches the five name maps and nothing server-only', () => {
     const own = reachableGraph(path.join(SRC_ROOT, 'components/shared/PkmnName.tsx'));
     const maps = [...own.files].filter((f) => f.endsWith('.json')).map((f) => path.basename(f)).sort();

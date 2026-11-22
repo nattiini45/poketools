@@ -3,14 +3,10 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Loader2, Search } from 'lucide-react';
-import { useT } from '@/i18n/client';
+import { useDataLocale, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import { getWikiPath, resultLabel } from '@/lib/wiki/search-result';
 import type { WikiSearchResult } from '@/types/wiki';
-
-// Canonical home is `@/lib/wiki/search-result` (map-free, so the NavBar's search can use it);
-// re-exported here for the existing wiki-side importers.
-export { RESULT_KIND, getWikiPath, resultLabel } from '@/lib/wiki/search-result';
 
 /**
  * The wiki search box. `/api/wiki/search` matches English and German names (with umlaut transliteration)
@@ -18,6 +14,7 @@ export { RESULT_KIND, getWikiPath, resultLabel } from '@/lib/wiki/search-result'
  */
 export default function WikiSearchBar() {
   const t = useT(wikiMessages);
+  const dataLocale = useDataLocale();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<WikiSearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -37,7 +34,8 @@ export default function WikiSearchBar() {
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/wiki/search?q=${encodeURIComponent(query)}`);
+        // `lang=` keeps the response's CDN cache key per-locale and refetches labels on a language switch.
+        const res = await fetch(`/api/wiki/search?q=${encodeURIComponent(query)}&lang=${dataLocale}`);
         const json = await res.json() as { success: boolean; data?: WikiSearchResult[] };
         if (json.success && json.data) {
           setResults(json.data);
@@ -53,7 +51,7 @@ export default function WikiSearchBar() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, dataLocale]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {

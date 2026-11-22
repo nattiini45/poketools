@@ -116,6 +116,7 @@ export default function SpriteStyleOptions({
                   height={56}
                   spriteStyle={resolveSpriteStyle(option)}
                   alt=""
+                  loading="lazy"
                   className="h-14 w-14"
                 />
               </span>

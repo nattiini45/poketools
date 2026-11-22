@@ -33,6 +33,16 @@ describe('GET /api/wiki/search (real data, DE/EN)', () => {
     expect(hits[0]).toMatchObject({ type: 'pokemon', name: 'Charizard' });
   });
 
+  it('?lang=de returns the German label (Charizard → Glurak)', async () => {
+    const hits = await search({ q: 'Charizard', lang: 'de' });
+    expect(hits[0]).toMatchObject({ type: 'pokemon', name: 'Charizard', label: 'Glurak' });
+  });
+
+  it('?lang=en returns the English label', async () => {
+    const hits = await search({ q: 'Glurak', lang: 'en' });
+    expect(hits[0]).toMatchObject({ type: 'pokemon', name: 'Charizard', label: 'Charizard' });
+  });
+
   it('German names with umlauts match their transliteration ("Ueberreste" → Leftovers)', async () => {
     const hits = await search({ q: 'Ueberreste', type: 'item' });
     expect(hits[0]).toMatchObject({ type: 'item', name: 'Leftovers' });
