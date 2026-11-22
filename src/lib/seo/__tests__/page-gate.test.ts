@@ -9,7 +9,10 @@ function lookups(over: Partial<PageLookups> = {}): PageLookups {
     shareLinkIsLive: vi.fn().mockResolvedValue(true),
     libraryEntryIsPublished: vi.fn().mockResolvedValue(true),
     leagueExists: vi.fn().mockResolvedValue(true),
+    leagueTeamExists: vi.fn().mockResolvedValue(true),
     tournamentExists: vi.fn().mockResolvedValue(true),
+    playerExists: vi.fn().mockResolvedValue(true),
+    teraTypeIsKnown: vi.fn().mockResolvedValue(true),
     chargeShareLink: vi.fn().mockResolvedValue({ allowed: true }),
     ...over,
   };
@@ -29,7 +32,7 @@ describe('pageGate', () => {
     const l = lookups();
     for (const path of [
       '/', '/teams/library', '/teams/shared', `/teams/shared/${ID}/extra`, '/teams/other/x', '/leagues', '/tournaments',
-      '/leagues/x/y', '/wiki', '/wiki/tera/nope', '/pokemon', '/players/nope', '/api/teams/shared/nope',
+      '/wiki', '/pokemon', '/players', '/api/teams/shared/nope',
     ]) {
       expect(await pageGate(path, HEADERS, l), path).toEqual(PASS);
     }
@@ -120,6 +123,47 @@ describe('pageGate', () => {
     it('answers not found for a row that does not exist', async () => {
       expect(await pageGate(`/leagues/${ID}`, HEADERS, lookups({ leagueExists: vi.fn().mockResolvedValue(false) }))).toEqual(NOT_FOUND);
       expect(await pageGate(`/tournaments/${ID}`, HEADERS, lookups({ tournamentExists: vi.fn().mockResolvedValue(false) }))).toEqual(NOT_FOUND);
+    });
+
+    it('covers a league under every one of its subpages', async () => {
+      const l = lookups({ leagueExists: vi.fn().mockResolvedValue(false) });
+      for (const path of [
+        `/leagues/${ID}/matchup`, `/leagues/${ID}/draft`, `/leagues/${ID}/draft-room`, `/leagues/${ID}/point-buy`,
+        `/leagues/${ID}/redraft`, `/leagues/${ID}/stats`, `/leagues/${ID}/teams`, `/leagues/${ID}/tokens`,
+      ]) {
+        expect(await pageGate(path, HEADERS, l), path).toEqual(NOT_FOUND);
+      }
+      expect(l.leagueExists).toHaveBeenCalledWith(ID);
+    });
+  });
+
+  describe('deeper public subjects', () => {
+    it('checks a league team page by its season and player', async () => {
+      const l = lookups();
+      expect(await pageGate(`/leagues/${ID}/teams/${ID}`, HEADERS, l)).toEqual(PASS);
+      expect(l.leagueTeamExists).toHaveBeenCalledWith(ID, ID);
+      expect(await pageGate(`/leagues/${ID}/teams/${ID}`, HEADERS, lookups({ leagueTeamExists: vi.fn().mockResolvedValue(false) }))).toEqual(NOT_FOUND);
+    });
+
+    it('answers not found for a malformed player id in a team page without a read', async () => {
+      const l = lookups();
+      expect(await pageGate(`/leagues/${ID}/teams/nope`, HEADERS, l)).toEqual(NOT_FOUND);
+      noReads(l);
+    });
+
+    it('checks a player page by id', async () => {
+      const l = lookups();
+      expect(await pageGate(`/players/${ID}`, HEADERS, l)).toEqual(PASS);
+      expect(l.playerExists).toHaveBeenCalledWith(ID);
+      expect(await pageGate(`/players/${ID}`, HEADERS, lookups({ playerExists: vi.fn().mockResolvedValue(false) }))).toEqual(NOT_FOUND);
+      expect(await pageGate('/players/nope', HEADERS, l)).toEqual(NOT_FOUND);
+    });
+
+    it('checks a tera page by name', async () => {
+      const l = lookups();
+      expect(await pageGate('/wiki/tera/Fire', HEADERS, l)).toEqual(PASS);
+      expect(l.teraTypeIsKnown).toHaveBeenCalledWith('Fire');
+      expect(await pageGate('/wiki/tera/nope', HEADERS, lookups({ teraTypeIsKnown: vi.fn().mockResolvedValue(false) }))).toEqual(NOT_FOUND);
     });
   });
 
