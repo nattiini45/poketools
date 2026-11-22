@@ -133,6 +133,16 @@ describe('the replay sees the schema (sanity)', () => {
     expect(EXTERNAL.map((e) => e.parent)).toContain('players');
     expect(PLAN.length).toBeGreaterThan(OWNED.size);
   });
+
+  it('is quoted by the docs with the current counts (issue #182)', () => {
+    const doc = (name: string) => readFileSync(path.join(process.cwd(), 'docs', name), 'utf8');
+    const derived = [...INVENTORY].filter(([, c]) => c === 'derived').length;
+    const kept = [...INVENTORY].filter(([, c]) => c === 'kept').length;
+    expect(doc('admin.md')).toContain(`${OWNED.size} owned tables, ${derived} derived, ${kept} kept, ${POINTERS.length} pointers`);
+    expect(doc('season.md')).toContain(`${OWNED.size} tables as of`);
+    expect(doc('season.md')).toContain(`rating history and their four phase counterparts; ${derived})`);
+    expect(doc('season.md')).toContain(`a restore; ${POINTERS.length})`);
+  });
 });
 
 describe('every table the league reaches is classified', () => {
