@@ -27,7 +27,16 @@ src/lib/season/
 └── substitute.ts  # Substituting a participant: the affected matches and the apply steps
 
 src/lib/supabase/queries/seasons.ts  # Typed season/participant/core queries
-src/lib/league-trash/                # League recycle bin: constants, service, errors, lifecycle state, social-image sweep (below)
+src/lib/league-trash/                # League recycle bin (below: delete/restore/expiry flow)
+├── constants.ts                     # LEAGUE_TRASH_RETENTION_DAYS: the only place the 90-day window is stated
+├── client.ts                        # The trash page's client-side views + headlineCounts / isSchemaChanged
+├── db-error.ts                      # The RPCs' typed error signals (LEAGUE_TRASH_DB_CODES, junction blocks)
+├── errors.ts                        # toLeagueTrashError: DB signal -> UserFacingError with a catalogued code
+├── json.ts                          # Defensive readers of untyped RPC results and route bodies (pure)
+├── lifecycle-state.ts               # leagueTrashLifecycleState + leagueTrashMachine: rebuild_pending/in_bin/purgeable/expired_rebuild_pending
+├── restore-warnings.ts              # The restore warnings' codes and their one parser
+├── service.ts                       # trashLeague around the RPCs (deadline, read-back, audit); server only
+└── social-image-sweep.ts            # Removes a purged league's match cards from the social-images bucket
 
 src/app/api/seasons/                 # Route tree (see API Routes)
 ```

@@ -611,7 +611,7 @@ A squash is checked by the same replay. A new baseline (a dump) that does not en
 
 Current:
 
-> - **RLS enabled as defense-in-depth** — all tables have RLS with permissive service role policies; the service role key bypasses RLS entirely, so auth guards in API routes remain the primary authorization layer. Public read tables have permissive SELECT policies; restricted tables (teams, credentials, cast sessions) are service-role-only. See `supabase/migrations/20260520000000_add_rls_policies.sql`.
+> - **RLS enabled as defense-in-depth** — all tables have RLS with permissive service role policies; the service role key bypasses RLS entirely, so auth guards in API routes remain the primary authorization layer. Public read tables have permissive SELECT policies; restricted tables (teams, credentials, cast sessions) are service-role-only. See `supabase/migrations/20260608100000_baseline_professional_schema.sql`.
 
 The current text already says "all tables have RLS", and that is false: `match_evolution_snapshots` was created without it (section 4, finding 1), and Option B does not change that. The new text names the exception. Drop the exception clause in the same change that enables RLS on that table (D4). Option C enables it, so 7.8 keeps the unqualified wording.
 

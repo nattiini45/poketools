@@ -373,6 +373,49 @@ describe('public docs (owner rulings)', () => {
     }
     expect(broken).toEqual([]);
   });
+
+  it('the anchor of a relative .md link names a heading of the target file (issue #146)', () => {
+    // GitHub's heading slugger (verified against the rendered anchors): lowercase, drop
+    // punctuation except - and _ (keeps accented letters like é and combining marks), THEN map
+    // each whitespace character to its own hyphen - no collapsing, so `A & B` -> `a--b` while
+    // `control (`x`) and` -> `control-x-and` (the parens leave single spaces).
+    const slug = (heading) =>
+      heading
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}\p{M}_ -]/gu, '')
+        .replace(/\s/g, '-');
+    const anchorsOf = new Map();
+    const headings = (rel) => {
+      if (!anchorsOf.has(rel)) {
+        anchorsOf.set(
+          rel,
+          new Set(
+            (read(rel).replace(/```[\s\S]*?```/g, '').match(/^#{1,6}\s+.+$/gm) ?? [])
+              .map((h) => slug(h.replace(/^#{1,6}\s+/, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'))),
+          ),
+        );
+      }
+      return anchorsOf.get(rel);
+    };
+    const dead = [];
+    for (const f of docs) {
+      for (const m of read(f).matchAll(/\]\(([^)\s#]+)#([^)\s]+)\)/g)) {
+        const target = m[1];
+        if (target === '' || /^[a-z]+:/i.test(target) || !target.endsWith('.md')) continue;
+        const rel = posix.normalize(posix.join(posix.dirname(f), target));
+        if (!existsSync(join(REPO_ROOT, rel))) continue;
+        let fragment;
+        try {
+          fragment = decodeURIComponent(m[2]);
+        } catch {
+          fragment = m[2];
+        }
+        if (!headings(rel).has(fragment.toLowerCase())) dead.push(`${f} -> ${m[0]}`);
+      }
+    }
+    expect(dead).toEqual([]);
+  });
 });
 
 // ── Source paths cited by the docs ───────────────────────────────────────────────────────────────
@@ -389,12 +432,15 @@ export const DEAD_PATH_EXEMPT = [
   { match: (f) => f === 'docs/teambuilder-broadcast.md', reason: 'describes the removed /teambuilder route; rewrite tracked separately' },
 ];
 
-/** Backticked `src/...` paths of a markdown text with their 1-based line numbers. */
+/** Backticked repo paths of a markdown text with their 1-based line numbers (issue #147: `src/` used to be the only scanned root). */
 export function citedSrcPaths(text) {
   const found = [];
   text.split('\n').forEach((line, i) => {
-    for (const m of line.matchAll(/`(src\/[^`\s]+)`/g)) {
-      const path = m[1].replace(/(?::\d+(?:-\d+)?|#L\d+(?:-L\d+)?)$/, '').replace(/[.,;:]+$/, '');
+    for (const m of line.matchAll(/`((?:src|scripts|supabase|public|e2e|openwiki|docs)\/[^`\s]+)`/g)) {
+      const path = m[1]
+        .replace(/(?::\d+(?:-\d+)?|#L\d+(?:-L\d+)?)$/, '')
+        .replace(/#.*$/, '') // `file.sql#function_name` names a symbol inside the file
+        .replace(/[.,;:]+$/, '');
       // `a|b` alternations, placeholders and ellipses name no single path.
       if (/[|<>{}$…]|\.\.\./.test(path)) continue;
       found.push({ line: i + 1, path });
@@ -406,9 +452,24 @@ export function citedSrcPaths(text) {
 /** The gitignored companion overlay: its files exist on a maintainer's machine only, and the docs name them on purpose. */
 export const OVERLAY_PATH_PREFIX = 'src/format-packs/private/';
 
+/**
+ * Paths the docs legitimately cite that are not in the tree (issue #147): runtime cache directories
+ * the generators create, the private overlay's migration folder and the third-party art the README
+ * says is not part of this repository.
+ */
+export const CITED_PATH_EXEMPT_PREFIXES = [
+  OVERLAY_PATH_PREFIX,
+  'scripts/pkmn-i18n/',
+  'scripts/world-assets/',
+  'scripts/sprites/',
+  'supabase/migrations-private/',
+  'public/avatar/',
+  'public/models/',
+];
+
 /** A cited path resolves to a file or directory; a glob resolves when the directory before its first star does. */
 export function srcPathExists(path, exists = (p) => existsSync(join(REPO_ROOT, p))) {
-  if (path.startsWith(OVERLAY_PATH_PREFIX)) return true;
+  if (CITED_PATH_EXEMPT_PREFIXES.some((prefix) => path.startsWith(prefix))) return true;
   const star = path.indexOf('*');
   if (star < 0) return exists(path.replace(/\/+$/, ''));
   const dir = path.slice(0, star).replace(/[^/]*$/, '').replace(/\/+$/, '');
@@ -464,6 +525,22 @@ describe('docs cite source paths that exist', () => {
     const planted = citedSrcPaths('see `src/lib/utils/date.ts` and `src/lib/utils/cn.ts:12` and `src/lib/utils/*.ts`');
     expect(planted.map((p) => p.path)).toEqual(['src/lib/utils/date.ts', 'src/lib/utils/cn.ts', 'src/lib/utils/*.ts']);
     expect(planted.filter((p) => !srcPathExists(p.path)).map((p) => p.path)).toEqual(['src/lib/utils/date.ts']);
+  });
+
+  it('scans backticked paths outside src/ too; a planted missing scripts/ file fails (issue #147)', () => {
+    const planted = citedSrcPaths('run `scripts/lib/xlsx.ts` after `scripts/import-point-buy.ts` and `scripts/pkmn-i18n/cache/`');
+    expect(planted.map((p) => p.path)).toEqual(['scripts/lib/xlsx.ts', 'scripts/import-point-buy.ts', 'scripts/pkmn-i18n/cache/']);
+    expect(planted.filter((p) => !srcPathExists(p.path)).map((p) => p.path)).toEqual(['scripts/lib/xlsx.ts']);
+    // Runtime caches, the private overlay and third-party art are exempt by design.
+    for (const p of [
+      'scripts/world-assets/out',
+      'scripts/sprites/cache',
+      'supabase/migrations-private/0001.sql',
+      'public/avatar/x.png',
+      'public/models/draft-room/x.glb',
+    ]) {
+      expect(srcPathExists(p, () => false)).toBe(true);
+    }
   });
 
   it('accepts a path of the private overlay, which a public checkout does not hold', () => {
@@ -528,8 +605,23 @@ export function fileStructureBlock(doc) {
   return body.match(/```[a-z]*\n([\s\S]*?)```/)?.[1] ?? null;
 }
 
-/** Modules whose trees a doc owns when its name is not the module's: the ruleset doc covers both halves of the ruleset code. */
-const DOC_MODULES = { 'ruleset-studio': ['ruleset-kit', 'ruleset-studio'] };
+/**
+ * Modules whose trees a doc owns: its own name, plus every module its tree claims by rooting it
+ * (issue #153 — a rooted-but-unowned module was checked by nobody). A doc must cover every module
+ * it roots; `SUMMARIZED_MODULES` is the opt-out for deliberate overviews.
+ */
+const DOC_MODULES = {
+  'ruleset-studio': ['ruleset-kit', 'ruleset-studio', 'studio-core'],
+  'draft-room': ['draft-room', 'draft-ui', 'draft-finder'],
+  'format-packs': ['format-pack', 'pack-extensions'],
+  'season': ['season', 'league-trash'],
+};
+
+/**
+ * Modules a doc summarizes instead of covering: it may root them without naming every top-level
+ * file (worlds.md's route-world tree is an intentional overview of a 50+ file module).
+ */
+const SUMMARIZED_MODULES = { worlds: ['route-world'] };
 
 /** Directory roots of a tree: lines that start at column 0 with `src/lib/<module>/` and name no file. */
 export function treeRoots(block) {
@@ -567,12 +659,15 @@ const testFilesIn = (dir) =>
   publicFiles(dir).filter((f) => posix.dirname(f) === dir && /\.test\.(tsx?|mjs)$/.test(f));
 
 describe('module docs: file structure trees', () => {
-  const moduleDocs = publicFiles('docs')
+  const docsWithTrees = publicFiles('docs')
     .filter((f) => /^docs\/[^/]+\.md$/.test(f))
     .map((f) => {
       const block = fileStructureBlock(read(f));
-      return { f, block, modules: block ? ownedModules(posix.basename(f, '.md'), block) : [] };
+      return { f, block, name: posix.basename(f, '.md') };
     })
+    .filter(({ block }) => block !== null);
+  const moduleDocs = docsWithTrees
+    .map(({ f, block, name }) => ({ f, block, modules: ownedModules(name, block) }))
     .filter(({ modules }) => modules.length > 0);
 
   it('finds the module docs', () => {
@@ -590,6 +685,22 @@ describe('module docs: file structure trees', () => {
       }
     }
     expect(missing).toEqual([]);
+  });
+
+  it('roots only modules some doc owns or the doc itself summarizes (issue #153)', () => {
+    // A root a doc does not own used to be silently dropped: `ownedModules` filtered the roots by a
+    // doc-name-driven candidate list, so e.g. `src/lib/studio-core/` in ruleset-studio.md's tree was
+    // never compared to anything. Every root must now be owned by some doc, or be an entry of the
+    // rooting doc's SUMMARIZED_MODULES list (the worlds.md route-world overview).
+    const owned = new Set(moduleDocs.flatMap(({ modules }) => modules));
+    const unowned = [];
+    for (const { f, block, name } of docsWithTrees) {
+      const summarized = new Set(SUMMARIZED_MODULES[name] ?? []);
+      for (const root of treeRoots(block)) {
+        if (!owned.has(root) && !summarized.has(root)) unowned.push(`${f}: src/lib/${root}/`);
+      }
+    }
+    expect(unowned).toEqual([]);
   });
 
   it('notices a new top-level file that no tree line covers (a planted zz-scratch.ts)', () => {

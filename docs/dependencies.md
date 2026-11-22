@@ -7,7 +7,7 @@ Check this doc before adding or updating any of these packages; check changelogs
 | Package | Gotcha |
 |---------|--------|
 | `next-auth` 5.x beta (version in `package.json`) | Beta API — check changelog before updating |
-| `@pkmn/dex` + `@pkmn/data` | Use `new Generations(Dex)`, never `Dex.forFormat()`. Server-side only — never import in client components (2MB+). See the Pokémon Data Rules in [`AGENTS.md`](../AGENTS.md#pokemon-data-rules) |
+| `@pkmn/dex` + `@pkmn/data` | Use `new Generations(Dex)`, never `Dex.forFormat()`. Server-side only — never import in client components (2MB+). See the Pokémon Data Rules in [`AGENTS.md`](../AGENTS.md#pokémon-data-rules) |
 | `@pkmn/protocol` + `@pkmn/client` | The replay-parsing pair. NOT `@pkmn/logs` (doesn't exist) |
 | `@smogon/calc` | Phase 8 damage calc — import server-side |
 | `tsx` (dev) | Runs the maintenance scripts (`scripts/*.ts`, several with `SUPABASE_SERVICE_ROLE_KEY`). It is a locked dev dependency, so a script always runs the version in the lockfile: call it `npx --no-install tsx ...`, which fails when it is not installed instead of downloading whatever npm resolves that day |

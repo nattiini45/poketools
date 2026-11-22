@@ -39,7 +39,7 @@ Species/moves are resolved via `@pkmn/data`. Unknowns are reported and kept (nev
 
 ## Zero-dependency reader
 
-`scripts/lib/xlsx.ts` / `src/lib/import/xlsx.ts` reads OOXML via zip central directory + shared strings. No `xlsx`/`exceljs` package.
+`src/lib/import/xlsx.ts` reads OOXML via zip central directory + shared strings. No `xlsx`/`exceljs` package.
 
 ## Idempotency
 

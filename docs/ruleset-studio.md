@@ -48,8 +48,24 @@ src/lib/ruleset-studio/           Server orchestration and rules around the libr
 ├── api-schemas.ts / api-body.ts / document-guard.ts / errors.ts / slug.ts    Envelopes, bounded body, error codes
 └── editor/                       Browser-side editor logic: state, picker (layout, selection, bulk, history), catalog client, starts
 
-src/lib/studio-core/              Shared by both Studios: access rules, keys, JSON canonicalisation and hashing, patch, bilingual text,
-                                  identity extraction, editor state, targets, DB error mapping, bounded API body, slug retry
+src/lib/studio-core/              Shared by both Studios (the Format Studio and the Ruleset Studio)
+├── access.ts                     Who may do what with a stored studio definition (pure rules, no I/O)
+├── api-body.ts                   Bounded request bodies of the studio routes
+├── api-schemas.ts                The studio-independent pieces of the request envelopes (zod, server side)
+├── db-errors.ts                  Reading a PostgREST error the same way for every studio (SQLSTATE, P0001 code)
+├── document-guard.ts             The cheap gate every studio route runs on a document before any parse or DB call
+├── editor-state.ts               The studio editor's state machine (document, dirty bits, picker state)
+├── identity.ts                   The list columns (name, description) from the document's identity block
+├── insert-with-slug.server.ts    Inserting a definition under a unique slug (server only)
+├── json.ts                       Bounded, canonical JSON helpers (size/shape inspector, canonical serialisation)
+├── keys.ts                       Identifier patterns and Map helpers shared by both kits and both studios
+├── ltext.ts                      Bilingual text (LText): builder, language resolution, immutable edit helpers
+├── name.ts                       The definition-name rule (1-120 chars after trim, no NUL, no surrogate halves)
+├── patch.ts                      RFC 6901 JSON-pointer helpers and a small immutable patch applier
+├── request.ts                    The studios' request layer: one request function behind every per-route function
+├── slug.ts                       Slugs (the stable address of a stored definition); pure helpers
+├── targets.ts                    DOM ids of editor fields from the JSON pointer an issue names
+└── text-schema.ts                Zod schemas of the text shapes both kits and both studios share
 src/lib/supabase/queries/ruleset-definitions.ts   The library's database module (explicit columns, bounded lists)
 src/lib/supabase/queries/rulesets.ts              Reads of the Ruleset read model by version id (getRulesetById, getHeadRuleset, option lists)
 
