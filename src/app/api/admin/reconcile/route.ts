@@ -8,11 +8,13 @@ import {
   reconcileSeasonDerivedData,
   type ReconcileReport,
 } from '@/lib/reconcile/reconcile-season';
+import { reconcileStreaks, type StreaksReconcileReport } from '@/lib/reconcile/reconcile-streaks';
+import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 
 export const maxDuration = 300;
 
-const VALID_SCOPES = ['season', 'all'] as const;
+const VALID_SCOPES = ['season', 'all', 'streaks'] as const;
 
 type ReconcileScope = (typeof VALID_SCOPES)[number];
 
@@ -35,7 +37,7 @@ function parseScope(value: unknown): ReconcileScope | null {
  */
 export async function POST(request: Request) {
   try {
-    await requireAdmin();
+    const admin = await requireAdmin();
 
     // Malformed JSON is its own 400 (invalid_json), never silently an empty
     // object that would then fail as a misleading "scope" error.
@@ -65,13 +67,46 @@ export async function POST(request: Request) {
     const scope = parseScope(body.scope);
     if (!scope) {
       return NextResponse.json<ApiResult<never>>(
-        { success: false, error: 'scope must be season or all', code: 'reconcile_scope_invalid' },
+        { success: false, error: 'scope must be season, all or streaks', code: 'reconcile_scope_invalid' },
         { status: 400 }
       );
     }
 
+    const seasonId = body.season_id;
+    if (scope === 'streaks') {
+      // season_id is optional: absent means every player, present narrows the
+      // repair to one season's roster plus the players of its completed
+      // matches — the same set the season reconcile covers.
+      if (seasonId !== undefined && (typeof seasonId !== 'string' || !isValidUuid(seasonId))) {
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: 'season_id must be a valid UUID',
+            code: 'INVALID_PARAM',
+            params: { name: 'season_id' },
+          },
+          { status: 400 }
+        );
+      }
+
+      const result = await reconcileStreaks({ seasonId, repair });
+      if (repair) {
+        logAuditEvent({
+          action: 'match.repair',
+          actor_id: admin.playerId,
+          actor_name: admin.name,
+          resource_type: 'player_streaks',
+          resource_id: seasonId ?? null,
+          metadata: { scope: 'streaks', season_id: seasonId ?? null, players: result.checked },
+        });
+      }
+      return NextResponse.json<ApiResult<StreaksReconcileReport>>({
+        success: true,
+        data: result,
+      });
+    }
+
     if (scope === 'season') {
-      const seasonId = body.season_id;
       if (!seasonId || typeof seasonId !== 'string') {
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'season_id required for season scope', code: 'reconcile_season_id_required' },

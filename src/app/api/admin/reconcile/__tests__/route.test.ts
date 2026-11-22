@@ -39,6 +39,14 @@ vi.mock('@/lib/reconcile/reconcile-season', () => ({
   reconcileSeasonDerivedData: vi.fn(),
 }));
 
+vi.mock('@/lib/reconcile/reconcile-streaks', () => ({
+  reconcileStreaks: vi.fn(),
+}));
+
+vi.mock('@/lib/audit/log', () => ({
+  logAuditEvent: vi.fn(),
+}));
+
 import { POST } from '@/app/api/admin/reconcile/route';
 import { requireAdmin, AuthError } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
@@ -46,7 +54,10 @@ import {
   reconcileAllSeasons,
   reconcileSeasonDerivedData,
 } from '@/lib/reconcile/reconcile-season';
+import { reconcileStreaks } from '@/lib/reconcile/reconcile-streaks';
+import { logAuditEvent } from '@/lib/audit/log';
 import type { ReconcileReport } from '@/lib/reconcile/reconcile-season';
+import type { StreaksReconcileReport } from '@/lib/reconcile/reconcile-streaks';
 
 const VALID_SEASON_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -344,5 +355,97 @@ describe('POST /api/admin/reconcile', () => {
 
     expect(safeErrorResponse).toHaveBeenCalled();
     expect(res.status).toBe(500);
+  });
+
+  describe('streaks scope', () => {
+    const ADMIN = {
+      playerId: '22222222-2222-4222-8222-222222222222',
+      name: 'Admin',
+      isAdmin: true,
+      isResourceAdmin: false,
+      isCreator: false,
+      psUsername: '',
+      championsUsername: '',
+      avatarUrl: null,
+      status: 'active',
+    } as const;
+
+    function makeStreaksReport(over: Partial<StreaksReconcileReport> = {}): StreaksReconcileReport {
+      return {
+        seasonId: null,
+        dryRun: true,
+        checked: 2,
+        players: [
+          { playerId: 'p1', status: 'current', mismatchedFields: [] },
+          { playerId: 'p2', status: 'stale', mismatchedFields: ['best_win_streak'] },
+        ],
+        summary: { stale: 1, repaired: false },
+        ...over,
+      };
+    }
+
+    function post(body: unknown) {
+      return POST(
+        new Request('http://localhost/api/admin/reconcile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      );
+    }
+
+    it('runs a dry run over every player when season_id is absent', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce(ADMIN);
+      vi.mocked(reconcileStreaks).mockResolvedValueOnce(makeStreaksReport());
+
+      const res = await post({ scope: 'streaks' });
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(reconcileStreaks).toHaveBeenCalledWith({ seasonId: undefined, repair: false });
+      expect(json.data.players[1].status).toBe('stale');
+      expect(reconcileAllSeasons).not.toHaveBeenCalled();
+      expect(reconcileSeasonDerivedData).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('narrows to a season when season_id is present', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce(ADMIN);
+      vi.mocked(reconcileStreaks).mockResolvedValueOnce(makeStreaksReport({ seasonId: VALID_SEASON_ID }));
+
+      await post({ scope: 'streaks', season_id: VALID_SEASON_ID });
+
+      expect(reconcileStreaks).toHaveBeenCalledWith({ seasonId: VALID_SEASON_ID, repair: false });
+    });
+
+    it('rejects a malformed season_id for the streaks scope', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce(ADMIN);
+
+      const res = await post({ scope: 'streaks', season_id: 'not-a-uuid' });
+      const json = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(json.code).toBe('INVALID_PARAM');
+      expect(reconcileStreaks).not.toHaveBeenCalled();
+    });
+
+    it('repairs through reconcileStreaks only and audits the repair', async () => {
+      vi.mocked(requireAdmin).mockResolvedValueOnce(ADMIN);
+      vi.mocked(reconcileStreaks).mockResolvedValueOnce(
+        makeStreaksReport({ dryRun: false, rebuilt: { players: 2 }, summary: { stale: 1, repaired: true } })
+      );
+
+      const res = await post({ scope: 'streaks', repair: true });
+
+      expect(res.status).toBe(200);
+      expect(reconcileStreaks).toHaveBeenCalledWith({ seasonId: undefined, repair: true });
+      // The streaks repair must never touch the rating, aggregate or evolution
+      // rebuilders — those live behind the season/all scopes.
+      expect(reconcileAllSeasons).not.toHaveBeenCalled();
+      expect(reconcileSeasonDerivedData).not.toHaveBeenCalled();
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ action: 'match.repair', metadata: expect.objectContaining({ scope: 'streaks' }) })
+      );
+    });
   });
 });
