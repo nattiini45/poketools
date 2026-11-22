@@ -16,6 +16,7 @@ export default {
   SOURCE_IS_GUEST: 'Source player must be a registered account',
   SOURCE_HAS_ACTIVITY: 'Source account has existing activity — use substitute instead',
   SOURCE_NOT_ACTIVE: 'Source account is banned or suspended',
+  GUEST_CHANGED: 'Guest player changed — try again.',
   claim_same_player: 'Guest and source account must be different players',
   player_not_found: 'Player not found',
   // A path id that is not a UUID names no player (404 before the query)

@@ -6,6 +6,9 @@ import { isRefObject } from '../plans/route-bodies';
 import { planDocumentSchema, type PlanDocument } from '../plans/schema';
 import type { StepDraft } from './steps';
 
+export { ownershipRegistryVersion, proposalStorageGeneration } from '../registry/ownership-version';
+export type { AgentStorageGeneration, ProposalStorageMode } from '../registry/ownership-version';
+
 export interface ProposalOwnershipFence {
   readonly mode: () => Promise<ProposalStorageMode>;
   readonly reader: AgentOwnershipReader;

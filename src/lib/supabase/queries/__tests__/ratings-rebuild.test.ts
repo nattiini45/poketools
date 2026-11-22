@@ -318,8 +318,8 @@ describe('replacePlayerRatingCurve', () => {
     expect(callsOf('rpc')).toHaveLength(1);
   });
 
-  it('maps the history fence refusal (40001) to RatingCurveStaleError, keeping the cause', async () => {
-    const error = { message: 'player gained a rating_history row', code: '40001' };
+  it('maps the history fence refusal (PT409) to RatingCurveStaleError, keeping the cause', async () => {
+    const error = { message: 'player gained a rating_history row', code: 'PT409' };
     h.rpc.fn = async () => ({ data: null, error });
     const rejection = replacePlayerRatingCurve(PLAYER, state, [entry], []);
     await expect(rejection).rejects.toBeInstanceOf(RatingCurveStaleError);

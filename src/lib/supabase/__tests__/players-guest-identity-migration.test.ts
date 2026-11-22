@@ -4,8 +4,9 @@
  * replay in migration-api-grants.test.ts.
  *
  * - The last definition of players_identity_check admits guests (… OR is_guest).
- * - claim_guest_player is defined only here, deletes the source before it moves the
- *   identity onto the guest, clears is_guest, and is service-role only.
+ * - claim_guest_player is defined here (superseded once by the PT409 fence migration),
+ *   deletes the source before it moves the identity onto the guest, clears is_guest,
+ *   and is service-role only.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -61,11 +62,11 @@ describe(FILE, () => {
     expect(commit).toBeGreaterThan(add);
   });
 
-  it('is the only definition of claim_guest_player', () => {
+  it('is defined only here and superseded once by the PT409 fence migration', () => {
     const definers = migrations
       .filter((m) => /FUNCTION public\.claim_guest_player\s*\(/.test(m.sql))
       .map((m) => m.file);
-    expect(definers).toEqual([FILE]);
+    expect(definers).toEqual([FILE, '20261121220000_fence_sqlstate_pt409.sql']);
     expect(fnStart).toBeGreaterThan(0);
   });
 

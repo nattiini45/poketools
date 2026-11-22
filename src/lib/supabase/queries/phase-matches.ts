@@ -151,6 +151,12 @@ export async function getPublicMatchesByPhaseIds(
   return new Map(phaseIds.map(id => [id, grouped.get(id.toLowerCase()) ?? []]));
 }
 
+export async function getPhaseBracketMatchRoundIds(phaseId: string): Promise<string[]> {
+  const rows = await readAllPages((from, to) => supabase.from('phase_matches')
+    .select('round_id').eq('phase_id', phaseId).order('id').range(from, to));
+  return rows.map((row) => row.round_id);
+}
+
 export async function getPhaseMatchesByRound(roundId: string): Promise<PhaseMatchWithPlayers[]> {
   const rows = await readAllPages<MatchWithPlayersRow>((from, to) => supabase
     .from('phase_matches')

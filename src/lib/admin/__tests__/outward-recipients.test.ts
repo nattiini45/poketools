@@ -2,13 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/supabase/queries/discord-webhooks', () => ({ resolveWebhooks: vi.fn() }));
 vi.mock('@/lib/supabase/queries/social-integrations', () => ({ resolveSocialIntegrations: vi.fn() }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-discord-webhooks', () => ({ resolvePhaseWebhooks: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-social-integrations', () => ({ resolvePhaseSocialIntegrations: vi.fn() }));
 
 import { matchesFilter, matchesFormatOptions } from '@/lib/discord/matchers';
 import { matchesEventFilter } from '@/lib/social/matchers';
 import { resolveWebhooks } from '@/lib/supabase/queries/discord-webhooks';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import { resolvePhaseWebhooks } from '@/lib/supabase/queries/phase-discord-webhooks';
+import { resolvePhaseSocialIntegrations } from '@/lib/supabase/queries/phase-social-integrations';
 import { resolveSocialIntegrations } from '@/lib/supabase/queries/social-integrations';
 import { DEFAULT_FORMAT_OPTIONS } from '@/types/discord';
-import { previewRecipients } from '../outward-recipients';
+import { previewPhaseBracketRecipients, previewRecipients } from '../outward-recipients';
 
 const TID = '00000000-0000-4000-8000-000000007710';
 const SEASON = '00000000-0000-4000-8000-000000008001';
@@ -23,6 +29,42 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(resolveWebhooks).mockResolvedValue([]);
   vi.mocked(resolveSocialIntegrations).mockResolvedValue([]);
+});
+
+describe('previewPhaseBracketRecipients', () => {
+  it('uses the native sender sets and event filters, preserving inherited channels and masking secrets', async () => {
+    vi.mocked(getPhaseById).mockResolvedValue({ id: TID, season_id: SEASON } as never);
+    vi.mocked(resolvePhaseWebhooks).mockResolvedValue([
+      webhook('inherited', { label: '#league' }),
+      webhook('phase', { phase_id: TID, event_filter: ['round_generated'], label: SECRET_URL }),
+      webhook('no-rounds', { event_filter: ['match_confirmed'] }),
+    ]);
+    vi.mocked(resolvePhaseSocialIntegrations).mockResolvedValue([
+      integration('inherited', { label: 'https://example.test/hook?token=abc' }),
+      integration('phase', { phase_id: TID, event_filter: ['round_generated'] }),
+      integration('no-rounds', { event_filter: ['tournament_started'] }),
+    ]);
+
+    const result = await previewPhaseBracketRecipients({ phaseId: TID, seasonId: SEASON });
+    expect(result).toEqual({
+      discord: { ids: ['inherited', 'phase'], names: ['Discord #league', 'Discord …cdef'].sort((a, b) => a.localeCompare(b)) },
+      social: { ids: ['inherited', 'phase'], names: ['bluesky @league', 'bluesky …'].sort((a, b) => a.localeCompare(b)) },
+    });
+    expect(JSON.stringify(result)).not.toMatch(/SECRET-TOKEN|ENCRYPTED-CREDENTIALS|token=abc/);
+    expect(resolvePhaseWebhooks).toHaveBeenCalledExactlyOnceWith(TID);
+    expect(resolvePhaseSocialIntegrations).toHaveBeenCalledExactlyOnceWith(TID);
+    expect(resolveWebhooks).not.toHaveBeenCalled();
+    expect(resolveSocialIntegrations).not.toHaveBeenCalled();
+  });
+
+  it('does not preview another league’s phase or fall back to tournament storage', async () => {
+    vi.mocked(getPhaseById).mockResolvedValue({ id: TID, season_id: TID } as never);
+    expect(await previewPhaseBracketRecipients({ phaseId: TID, seasonId: SEASON })).toBeNull();
+    expect(resolvePhaseWebhooks).not.toHaveBeenCalled();
+    expect(resolvePhaseSocialIntegrations).not.toHaveBeenCalled();
+    expect(resolveWebhooks).not.toHaveBeenCalled();
+    expect(resolveSocialIntegrations).not.toHaveBeenCalled();
+  });
 });
 
 describe('previewRecipients', () => {

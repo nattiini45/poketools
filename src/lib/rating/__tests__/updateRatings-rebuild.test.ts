@@ -877,7 +877,7 @@ describe('rebuildRatingsForPlayer', () => {
       }
       // The SQL fence: a row of a completed match outside the expected set.
       const unexpected = store.rows.some((row) => row.player_id === playerId && !expected.includes(row.match_id));
-      if (unexpected) throw new RatingCurveStaleError(playerId, new Error('40001'));
+      if (unexpected) throw new RatingCurveStaleError(playerId, new Error('PT409'));
       return replace(playerId, state, history, expected);
     });
 
@@ -893,7 +893,7 @@ describe('rebuildRatingsForPlayer', () => {
 
   it('gives up after three refused writes and throws the stale error (nothing written by any attempt)', async () => {
     mockGetCompletedMatches.mockResolvedValue([]);
-    const stale = new RatingCurveStaleError(PLAYER_ID, new Error('40001'));
+    const stale = new RatingCurveStaleError(PLAYER_ID, new Error('PT409'));
     mockReplaceCurve.mockRejectedValue(stale);
 
     await expect(rebuildRatingsForPlayer(PLAYER_ID)).rejects.toBe(stale);
@@ -1229,7 +1229,7 @@ describe('test-league matches in the rebuild', () => {
     };
     useFakeStore(store);
     store.matches[0] = { ...store.matches[0], tournament_id: 't-flagged-later' };
-    // The plan reads the old flags; the flag is set before the write, which the SQL refuses (40001).
+    // The plan reads the old flags; the flag is set before the write, which the SQL refuses (PT409).
     mockLoadScope
       .mockResolvedValueOnce(createRatingScope([]))
       .mockResolvedValue(createRatingScope(['t-flagged-later']));
@@ -1238,7 +1238,7 @@ describe('test-league matches in the rebuild', () => {
     mockReplaceCurve.mockImplementation(async (playerId, state, history, expected) => {
       if (!refused && history.some((row) => row.match_id === 'm-flagged')) {
         refused = true;
-        throw new RatingCurveStaleError(playerId, new Error('40001 test league'));
+        throw new RatingCurveStaleError(playerId, new Error('PT409 test league'));
       }
       return replace(playerId, state, history, expected);
     });
