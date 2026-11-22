@@ -38,7 +38,7 @@ const FOUND_TTL_MS = 60_000;
 const FOUND_MAX = 500;
 const found = new Map<string, number>();
 
-async function rowExists(table: 'seasons' | 'tournaments', id: string): Promise<boolean> {
+async function rowExists(table: 'seasons' | 'tournaments' | 'players', id: string): Promise<boolean> {
   const key = `${table}:${id}`;
   const now = Date.now();
   const until = found.get(key);
@@ -57,3 +57,33 @@ async function rowExists(table: 'seasons' | 'tournaments', id: string): Promise<
 
 export const leagueExists = (seasonId: string) => rowExists('seasons', seasonId);
 export const tournamentExists = (tournamentId: string) => rowExists('tournaments', tournamentId);
+export const playerExists = (playerId: string) => rowExists('players', playerId);
+
+/**
+ * Whether the league team page's pair of subjects exists: the season (any store mode) and a team of that player in
+ * it, read with the same store rule as the page's own `getLeagueDisplayTeams` — phase rosters of the season's phases
+ * in the phase generations, tournament teams of the season's stages in legacy. A hit is not remembered: teams churn
+ * more than leagues do, and the page still 404s a team removed after the check.
+ */
+export async function leagueTeamExists(seasonId: string, playerId: string): Promise<boolean> {
+  if (!(await leagueExists(seasonId))) return false;
+
+  const mode = await getPhaseRouteMode();
+  if (mode === 'phase' || mode === 'frozen_phase') {
+    const { data, error } = await supabase.from('phase_teams')
+      .select('id, phase:league_phases!phase_teams_phase_id_fkey!inner(season_id)')
+      .eq('phase.season_id', seasonId)
+      .eq('player_id', playerId)
+      .limit(1);
+    if (error) throw error;
+    return data.length > 0;
+  }
+
+  const { data, error } = await supabase.from('teams')
+    .select('id, tournament:tournaments!teams_tournament_id_fkey!inner(season_id)')
+    .eq('tournament.season_id', seasonId)
+    .eq('player_id', playerId)
+    .limit(1);
+  if (error) throw error;
+  return data.length > 0;
+}
