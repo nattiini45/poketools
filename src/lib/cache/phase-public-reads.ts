@@ -9,7 +9,6 @@ import { toPublicPhaseMatch } from '@/lib/match/public-match';
 import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { publicTags } from '@/lib/revalidation';
 import { getPhaseParticipants, getPhaseWithDetails, getPhasesBySeasonIds } from '@/lib/supabase/queries/league-phases';
-import { getHiddenPlayerIds } from '@/lib/supabase/queries/players';
 import { getTotalGamesInMixedScope } from '@/lib/supabase/queries/aggregates';
 import { getCompletedPhaseMatchRecordsBatch } from '@/lib/supabase/queries/phase-format-runtime';
 import { getGroupsByPhase } from '@/lib/supabase/queries/phase-groups';
@@ -120,13 +119,9 @@ function headToHead(phaseId: string, playerA: string, playerB: string) {
 }
 
 const participants = cache((phaseId: string) =>
-  cachedRead('participants', [phaseId], [publicTags.phase(phaseId), publicTags.players], async () => {
-    const [rows, hidden] = await Promise.all([getPhaseParticipants(phaseId), getHiddenPlayerIds()]);
-    const participants = rows.map(toPublicTournamentParticipant);
-    if (hidden.length === 0) return participants;
-    const hide = new Set(hidden);
-    return participants.filter((participant) => !hide.has(participant.id));
-  }),
+  cachedRead('participants', [phaseId], [publicTags.phase(phaseId), publicTags.players], async () =>
+    (await getPhaseParticipants(phaseId)).map(toPublicTournamentParticipant),
+  ),
 );
 
 const groups = cache((phaseId: string) =>

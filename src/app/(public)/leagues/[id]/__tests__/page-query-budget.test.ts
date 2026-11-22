@@ -101,7 +101,7 @@ import { resolveViewerWorld } from '@/lib/worlds/registry';
 import type { WorldRouteData } from '@/lib/worlds/route-data';
 
 // 10 + the league-groups read (group tables of the standings; league groups, 2026-10).
-const WORLD_BRANCH_BUDGET = 11;
+const WORLD_BRANCH_BUDGET = 12;
 
 type AnyElement = ReactElement<Record<string, unknown>>;
 
@@ -223,9 +223,9 @@ function nativeTables(mode: 'phase' | 'frozen_phase' | 'frozen_legacy', swiss = 
 
 describe('league page — native storage budget', () => {
   it.each([
-    [EPB_SEASON_ID, 'EvoligaWorld', false, 10],
-    [SAKURA_SEASON_ID, 'SakuraWorld', false, 9],
-    [SAKURA_SEASON_ID, 'SakuraWorld', true, 10],
+    [EPB_SEASON_ID, 'EvoligaWorld', false, 11],
+    [SAKURA_SEASON_ID, 'SakuraWorld', false, 10],
+    [SAKURA_SEASON_ID, 'SakuraWorld', true, 11],
   ] as const)('season %s (%s, Swiss=%s) uses %s cold reads including mode', async (seasonId, worldName, swiss, budget) => {
     const tables = nativeTables('phase', swiss);
     fake.current = createFakeSupabase(tables);
@@ -248,7 +248,8 @@ describe('league page — native storage budget', () => {
     expectNoPrivatePlayerData(data);
     expectNoStatsReads();
     if (seasonId === SAKURA_SEASON_ID) expect(data.teamAces).toEqual({ p1: 'Dragonite' });
-    if (swiss) expect(data.standings.find((row) => row.player_id === 'p3')?.wins).toBe(1);
+    // p3 is a test account: its row (a Swiss bye win) drops out of the public table.
+    if (swiss) expect(data.standings.find((row) => row.player_id === 'p3')).toBeUndefined();
   });
 
   it('does not reuse the legacy world cache during a frozen native read, or vice versa', async () => {
@@ -339,6 +340,8 @@ describe('league page — route-world branch query budget', () => {
       'evolution_tracker',
       'format_rules',
       'matches',
+      // The hidden-player list the standings and participant filter drop rows by.
+      'players',
       'point_buy_list_entries',
       // League groups: the standings' group tables (none in this fixture league; one read).
       'season_groups',
@@ -361,7 +364,7 @@ describe('league page — route-world branch query budget', () => {
     const page = await renderPage(SAKURA_SEASON_ID);
 
     expect(fake.current!.queries.length).toBeLessThanOrEqual(WORLD_BRANCH_BUDGET);
-    expect(fake.current!.queries).toHaveLength(9);
+    expect(fake.current!.queries).toHaveLength(10);
     expectNoStatsReads();
     expect(findByName(page, 'SakuraWorld')).toBeDefined();
   });
@@ -376,8 +379,8 @@ describe('league page — route-world branch query budget', () => {
     await renderPage(SAKURA_SEASON_ID);
 
     const read = fake.current.queries.map((q) => q.table);
-    // The nine reads of a league without a Swiss stage + the Swiss stages' bye rounds, in the same wave.
-    expect(read).toHaveLength(10);
+    // The ten reads of a league without a Swiss stage + the Swiss stages' bye rounds, in the same wave.
+    expect(read).toHaveLength(11);
     expect(read.filter((table) => table === 'rounds')).toHaveLength(1);
     expect(read.length).toBeLessThanOrEqual(WORLD_BRANCH_BUDGET);
     expectNoStatsReads();
@@ -410,9 +413,10 @@ describe('league page — route-world branch query budget', () => {
     await renderPage(EPB_SEASON_ID);
 
     const tables = fake.current!.queries.map((q) => q.table);
-    // The ten anonymous route reads plus the viewer's world preference.
-    expect(tables).toHaveLength(10 + 1);
-    expect(tables.filter((t) => t === 'players')).toHaveLength(1);
+    // The eleven anonymous route reads plus the viewer's world preference.
+    expect(tables).toHaveLength(11 + 1);
+    // One `players` read for the world preference join besides the hidden-player list.
+    expect(tables.filter((t) => t === 'players')).toHaveLength(2);
     expect(tables).not.toContain('redraft_trade_requests');
     expectNoStatsReads();
   });
@@ -425,7 +429,8 @@ describe('league page — the world payload is public-only', () => {
 
     expect(world).toBeDefined();
     const data = world!.props.data as { participants: Record<string, unknown>[] };
-    expect(data.participants.length).toBe(4);
+    // The fixture's suspended (p2) and test (p3) players drop out of the public list.
+    expect(data.participants.length).toBe(2);
     for (const participant of data.participants) {
       expect(Object.keys(participant).sort()).toEqual(['gym_type', 'id', 'name']);
     }
@@ -528,6 +533,11 @@ describe('league page — public read cache (D36 fix 5)', () => {
 
     expect(fakeNextCache.reads.length).toBeGreaterThan(0);
     for (const read of fakeNextCache.reads) {
+      // The hidden-player list is one global entry tagged `players` at the list TTL.
+      if (read.keyParts.includes('hidden-player-ids')) {
+        expect(read.tags).toEqual(['players']);
+        continue;
+      }
       expect(read.tags).toContain(`season:${EPB_SEASON_ID}`);
       expect(read.revalidate).toBe(30);
     }

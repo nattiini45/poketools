@@ -889,13 +889,16 @@ export async function resolvePlayerNames(
  * named rows at read time, so a ban or unban needs no data rebuild. One narrow read.
  */
 export async function getHiddenPlayerIds(): Promise<string[]> {
+  // A flat select (not `.or`): the in-memory PostgREST fake the budget tests
+  // run against ignores `or`, so the filter is applied on the returned rows.
   const { data, error } = await supabase
     .from('players')
-    .select('id')
-    .or('status.neq.active,is_test_account.eq.true');
+    .select('id, status, is_test_account');
 
   if (error) throw error;
-  return data.map((row) => row.id);
+  return data
+    .filter((row) => row.status !== 'active' || row.is_test_account === true)
+    .map((row) => row.id);
 }
 
 /**

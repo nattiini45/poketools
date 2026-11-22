@@ -19,6 +19,7 @@ import type { Ruleset } from '@/types/ruleset';
 import type { SeasonWithDetails } from '@/types/season';
 import type { TournamentReport } from '@/types/tournament-report';
 import type { LeagueHubTab, PhaseStorage } from './tabs';
+import { withoutHiddenIds, withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import {
   bracketStages,
   buildTableStage,
@@ -119,6 +120,8 @@ export interface LeagueHubLoadContext {
   stages: readonly LeagueStage[];
   storage?: PhaseStorage;
   participants: readonly PublicSeasonParticipant[];
+  /** Players the public directory hides; their rows drop out of the group tables the tab builds. */
+  hiddenPlayerIds?: readonly string[];
   /** The world payload, still in flight: the tab reads run beside it, never after it. */
   routeData: Promise<WorldRouteData | null>;
 }
@@ -255,11 +258,12 @@ export async function loadLeagueHubPanel(
       // The stored tiebreaker order comes from the world payload's format rules (already read, no extra query).
       const context: SeasonStandingsContext = worldStandingsContext(league.format_type, data);
       const gymTypes = gymTypeMap(ctx.participants);
+      const hiddenIds = ctx.hiddenPlayerIds ?? [];
       return {
         tab,
         isEvolutionPointBuy: epb,
-        stages: tables.map((stage) =>
-          buildTableStage({
+        stages: tables.map((stage) => {
+          const built = buildTableStage({
             stage,
             matches: stageMatches(data.fixtures, stage.id),
             participants: participants[stage.id] ?? [],
@@ -270,8 +274,16 @@ export async function loadLeagueHubPanel(
             context,
             gymTypes,
             showAdvancement: showsAdvancement(stages, stage.id),
-          }),
-        ),
+          });
+          return {
+            ...built,
+            tables: built.tables.map((table) => ({
+              ...table,
+              standings: withoutHiddenPlayers(table.standings, hiddenIds),
+              members: withoutHiddenIds(table.members, hiddenIds),
+            })),
+          };
+        }),
       };
     }
 
@@ -329,7 +341,12 @@ export async function loadLeagueHubPanel(
           const matches = stageMatches(data.fixtures, stage.id);
           return {
             stage: withDisplayStatus(stage, matches),
-            groups: withPublicMembers(groups[stage.id] ?? [], matches, enrollment[stage.id] ?? [], ctx.participants),
+            groups: withPublicMembers(groups[stage.id] ?? [], matches, enrollment[stage.id] ?? [], ctx.participants).map(
+              (group) => ({
+                ...group,
+                members: withoutHiddenPlayers(group.members, ctx.hiddenPlayerIds ?? []),
+              }),
+            ),
             showAdvancement: showsAdvancement(stages, stage.id),
           };
         }),

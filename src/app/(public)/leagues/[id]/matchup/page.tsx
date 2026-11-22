@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { publicReads } from '@/lib/cache/public-reads';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import { buildMatchupDexPayload } from '@/lib/evolution/matchup-payload';
+import { withoutHiddenIds } from '@/lib/players/hidden-players';
 import MatchupClient from '@/components/evolution/MatchupClient';
 import { getT } from '@/i18n/server';
 import { draftLegacyPagesMessages } from '@/i18n/messages/draft/legacy/pages';
@@ -36,7 +37,7 @@ export default async function MatchupPage({ params }: PageProps) {
 
   // Public participant rows only (no private player columns are read); the
   // client receives ids and names alone.
-  const [participants, trackers, formatRules, teamRoles, pointBuyEntries] = await Promise.all([
+  const [participants, trackers, formatRules, teamRoles, pointBuyEntries, hiddenPlayerIds] = await Promise.all([
     publicReads.seasonParticipants(id),
     isEpb ? publicReads.seasonTrackers(id) : Promise.resolve([]),
     // Disclosed fallback: missing format rules degrade to "no banned moves",
@@ -49,7 +50,9 @@ export default async function MatchupPage({ params }: PageProps) {
     isEpb && league.point_buy_list_id
       ? publicReads.pointBuyEntries(league.point_buy_list_id)
       : Promise.resolve([]),
+    publicReads.hiddenPlayerIds(),
   ]);
+  const visibleParticipants = withoutHiddenIds(participants, hiddenPlayerIds);
 
   const priceByBase = Object.fromEntries(
     pointBuyEntries.map((e) => [e.base_pokemon, e.price]),
@@ -72,7 +75,7 @@ export default async function MatchupPage({ params }: PageProps) {
         <MatchupClient
           seasonId={id}
           formatType={league.format_type}
-          participants={participants.map((p) => ({ id: p.id, name: p.name }))}
+          participants={visibleParticipants.map((p) => ({ id: p.id, name: p.name }))}
           trackers={trackers}
           bannedMoves={formatRules?.banned_moves ?? []}
           initialRoles={teamRoles}

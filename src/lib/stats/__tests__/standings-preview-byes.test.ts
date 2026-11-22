@@ -15,7 +15,6 @@ const h = vi.hoisted(() => ({
   getFormatRules: vi.fn(),
 }));
 
-vi.mock('@/lib/supabase/queries/players', () => ({ getHiddenPlayerIds: vi.fn().mockResolvedValue([]) }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonParticipants: h.getSeasonParticipants,
   getSeasonStageBrackets: h.getSeasonStageBrackets,

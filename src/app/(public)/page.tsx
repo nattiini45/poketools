@@ -12,6 +12,7 @@ import AgentChatWidget from '@/components/agent/AgentChatWidget';
 import HeroBall from '@/components/home/HeroBall';
 import Pokeball from '@/components/shared/Pokeball';
 import { getSessionPlayer } from '@/lib/auth/helpers';
+import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import type { ItemIconId } from '@/lib/pkmn/item-icons';
 import { cn } from '@/lib/utils/cn';
 import { getT } from '@/i18n/server';
@@ -156,9 +157,12 @@ export default async function Home() {
     leagues.filter((l) => l.status === 'active').length + tournaments.filter((t) => t.status === 'active').length;
 
   const featuredStandings = featured === null ? []
-    : nativeStore && featured.type === 'league'
-      ? await phasePublicReads.seasonStandingsPreview(featured.item.id, 3)
-      : await publicReads.standingsPreview(featured.type, featured.item.id, 3);
+    : withoutHiddenPlayers(
+        nativeStore && featured.type === 'league'
+          ? await phasePublicReads.seasonStandingsPreview(featured.item.id, 3)
+          : await publicReads.standingsPreview(featured.type, featured.item.id, 3),
+        await publicReads.hiddenPlayerIds(),
+      );
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8">

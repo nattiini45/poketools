@@ -217,12 +217,7 @@ const ratingLeaderboard = cache((minGames: number) =>
       tags: [publicTags.ratings, publicTags.players],
       ttl: PUBLIC_LIST_TTL_S,
     },
-    async () => {
-      const [entries, hidden] = await Promise.all([getLeaderboardEntries(minGames), getHiddenPlayerIds()]);
-      if (hidden.length === 0) return entries;
-      const hide = new Set(hidden);
-      return entries.filter((entry) => !hide.has(entry.player_id));
-    },
+    () => getLeaderboardEntries(minGames),
   ),
 );
 
@@ -236,9 +231,7 @@ const streakLeaderboard = cache(() =>
       ttl: PUBLIC_LIST_TTL_S,
     },
     async (): Promise<StreakLeaderboardEntry[]> => {
-      const [raw, hidden] = await Promise.all([getStreakLeaderboard(), getHiddenPlayerIds()]);
-      const hide = new Set(hidden);
-      const streaks = hide.size ? raw.filter((s) => !hide.has(s.player_id)) : raw;
+      const streaks = await getStreakLeaderboard();
       const players = await getPlayersByIds(streaks.map((s) => s.player_id));
       return streaks.map((s) => {
         const player = players.get(s.player_id);
@@ -385,12 +378,9 @@ const seasonStages = cache((seasonId: string) =>
 );
 
 const seasonParticipants = cache((seasonId: string) =>
-  cachedRead(seasonSpec('season-participants', seasonId, [publicTags.players]), async () => {
-    const [parts, hidden] = await Promise.all([getPublicSeasonParticipants(seasonId), getHiddenPlayerIds()]);
-    if (hidden.length === 0) return parts;
-    const hide = new Set(hidden);
-    return parts.filter((participant) => !hide.has(participant.id));
-  }),
+  cachedRead(seasonSpec('season-participants', seasonId, [publicTags.players]), () =>
+    getPublicSeasonParticipants(seasonId),
+  ),
 );
 
 const seasonGymTypes = cache((seasonId: string) =>
@@ -560,13 +550,8 @@ const tournamentHeadToHead = cache((tournamentId: string, playerA: string, playe
 const tournamentParticipants = cache((tournamentId: string) =>
   cachedRead(
     tournamentSpec('tournament-participants', tournamentId, [publicTags.players]),
-    async (): Promise<PublicTournamentParticipant[]> => {
-      const [rows, hidden] = await Promise.all([getParticipants(tournamentId), getHiddenPlayerIds()]);
-      const participants = rows.map(toPublicTournamentParticipant);
-      if (hidden.length === 0) return participants;
-      const hide = new Set(hidden);
-      return participants.filter((participant) => !hide.has(participant.id));
-    },
+    async (): Promise<PublicTournamentParticipant[]> =>
+      (await getParticipants(tournamentId)).map(toPublicTournamentParticipant),
   ),
 );
 

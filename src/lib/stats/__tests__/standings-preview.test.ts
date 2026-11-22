@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { getNativeLeagueStandingsPreview, playerStandingFromRows, type StandingsPreviewRow } from '../standings-preview';
 
 const native = vi.hoisted(() => ({ parts: vi.fn(), stages: vi.fn(), context: vi.fn(), records: vi.fn(), byes: vi.fn() }));
-vi.mock('@/lib/supabase/queries/players', () => ({ getHiddenPlayerIds: vi.fn().mockResolvedValue([]) }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getPublicSeasonParticipants: native.parts }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseRankingStages: native.stages }));
 vi.mock('@/lib/league-phase/standings-context', () => ({ loadNativeSeasonStandingsContext: native.context }));

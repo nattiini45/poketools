@@ -6,6 +6,7 @@ import type { PublicPhase } from '@/lib/cache/phase-public-reads';
 import type { TournamentWithDetails } from '@/types/tournament';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
+import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import { scoringByeRecords } from '@/lib/tournament/byes';
 import { buildTournamentHero, parseTournamentTab, tournamentPageTabs, TOURNAMENT_TAB_PARAM, type TournamentPageTab } from '@/lib/tournament/page-view';
@@ -78,6 +79,7 @@ async function loadLegacyDetail(tournament: TournamentWithDetails) {
     aggregates,
     totalGamesInScope,
     season,
+    hiddenPlayerIds,
   ] = await Promise.all([
     publicReads.tournamentRounds(id),
     publicReads.tournamentMatches(id),
@@ -95,6 +97,7 @@ async function loadLegacyDetail(tournament: TournamentWithDetails) {
     publicReads.aggregatesSummary('tournament', id),
     publicReads.totalGames('tournament', id),
     tournament.season_id ? publicReads.seasonRow(tournament.season_id) : Promise.resolve(null),
+    publicReads.hiddenPlayerIds(),
   ]);
 
   // Season format drives the standings tiebreaker chain (EPB uses
@@ -109,7 +112,7 @@ async function loadLegacyDetail(tournament: TournamentWithDetails) {
   const kit = season?.format_type === 'custom' ? kitForPhase(await publicReads.seasonKitStandings(season.id), id) : undefined;
   return {
     rounds, matches, participants, matchRecords, ruleset, battleStats, participantGymTypes, reports,
-    aggregates, totalGamesInScope, season, evolutionPoints, tiebreakerOrder, kit,
+    aggregates, totalGamesInScope, season, evolutionPoints, tiebreakerOrder, kit, hiddenPlayerIds,
   };
 }
 
@@ -132,7 +135,7 @@ export async function renderCompetitionDetail(
   if (!data) notFound();
   const {
     rounds, matches, participants, matchRecords, ruleset, battleStats, participantGymTypes, reports, aggregates,
-    totalGamesInScope, season, evolutionPoints, tiebreakerOrder, kit,
+    totalGamesInScope, season, evolutionPoints, tiebreakerOrder, kit, hiddenPlayerIds,
   } = data;
   const isRoundRobin = competition.bracket_type === 'round_robin';
   const seasonFormatType = season?.format_type ?? null;
@@ -168,8 +171,13 @@ export async function renderCompetitionDetail(
     participantAvatars[p.id] = p.avatar_url;
   }
 
+  // The table scores every participant — a hidden player's matches still
+  // count for their opponents — then their own rows drop.
   const standings = !isRoundRobin
-    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, { byes: scoringByeRecords(competition.bracket_type, rounds) }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit })
+    ? withoutHiddenPlayers(
+        computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, { byes: scoringByeRecords(competition.bracket_type, rounds) }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit }),
+        hiddenPlayerIds,
+      )
     : [];
 
   const totalRounds = rounds.length > 0
@@ -203,13 +211,16 @@ export async function renderCompetitionDetail(
   // filter recomputes it), so the hero ranks it here with the same inputs, unfiltered. An elimination bracket has
   // no table: the generic standings do not model bracket placement, so the hero names no leader or champion.
   const heroStandings = isRoundRobin
-    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {
-        ...roundRobinMatchPoints(seasonFormatType),
-        battleStats,
-        gamesByMatch: Object.fromEntries(
-          matches.filter((m) => m.status === 'completed').map((m) => [m.id, m.games.map((game) => game.winner_id ?? '')]),
-        ),
-      }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit })
+    ? withoutHiddenPlayers(
+        computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {
+          ...roundRobinMatchPoints(seasonFormatType),
+          battleStats,
+          gamesByMatch: Object.fromEntries(
+            matches.filter((m) => m.status === 'completed').map((m) => [m.id, m.games.map((game) => game.winner_id ?? '')]),
+          ),
+        }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit }),
+        hiddenPlayerIds,
+      )
     : competition.bracket_type === 'swiss'
       ? standings
       : [];
@@ -298,6 +309,7 @@ export async function renderCompetitionDetail(
         seasonFormatType={seasonFormatType}
         seasonId={competition.season_id}
         evolutionPoints={evolutionPoints}
+        hiddenPlayerIds={hiddenPlayerIds}
         tiebreakerOrder={tiebreakerOrder}
         kit={kit}
         activeTab={activeTab}

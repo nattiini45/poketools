@@ -4,7 +4,6 @@ import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tourn
 import { loadScoringByes, loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
 import { formatScoresByes, scoringByeRecords, scoringByeRecordsForStages } from '@/lib/tournament/byes';
 import { getPublicSeasonParticipants, getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
-import { getHiddenPlayerIds } from '@/lib/supabase/queries/players';
 import { loadRankingContext, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
 import { getPhaseRankingStages } from '@/lib/supabase/queries/league-phases';
@@ -35,9 +34,7 @@ function toPreviewRows(standings: StandingsRow[], limit: number): StandingsPrevi
 async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
   // Both reads throw on a Supabase error: a failed stage read must not turn
   // into an all-zero table that the public cache then serves to everyone.
-  const [allParts, hidden] = await Promise.all([getSeasonParticipants(seasonId), getHiddenPlayerIds()]);
-  const hide = new Set(hidden);
-  const parts = hide.size ? allParts.filter((participant) => !hide.has(participant.id)) : allParts;
+  const parts = await getSeasonParticipants(seasonId);
   const { stageIds, hasSwissStage, formatType, stages, hasGroups } = await getSeasonStageBrackets(seasonId);
   // The Swiss stages' stored byes score in the season table as in each stage's own table: one rounds read for all
   // stages. A league without a Swiss stage has none, and Evolution Point Buy tables never read byes, so neither
@@ -81,9 +78,7 @@ function leaguePreviewTable(
 }
 
 export async function getNativeLeagueStandingsPreview(seasonId: string, limit: number): Promise<StandingsPreviewRow[]> {
-  const [allParts, stages, hidden] = await Promise.all([getPublicSeasonParticipants(seasonId), getPhaseRankingStages(seasonId), getHiddenPlayerIds()]);
-  const hide = new Set(hidden);
-  const parts = hide.size ? allParts.filter((participant) => !hide.has(participant.id)) : allParts;
+  const [parts, stages] = await Promise.all([getPublicSeasonParticipants(seasonId), getPhaseRankingStages(seasonId)]);
   const ids = stages.map((stage) => stage.id);
   const [records, ranking] = await Promise.all([
     getCompletedPhaseMatchRecordsBatch(ids),
@@ -106,14 +101,11 @@ export async function getStandingsPreview(
   limit = 3,
 ): Promise<StandingsPreviewRow[]> {
   if (kind === 'tournament') {
-    const [allParts, records, tournament, hidden] = await Promise.all([
+    const [parts, records, tournament] = await Promise.all([
       getParticipants(id),
       getCompletedMatchRecords(id),
       getTournamentById(id),
-      getHiddenPlayerIds(),
     ]);
-    const hide = new Set(hidden);
-    const parts = hide.size ? allParts.filter((participant) => !hide.has(participant.id)) : allParts;
     // A Swiss tournament's table scores the byes stored on its rounds, except a stage of an Evolution Point Buy
     // league (`loadScoringByes` returns none for it).
     const byes = tournament ? await loadScoringByes(tournament) : [];

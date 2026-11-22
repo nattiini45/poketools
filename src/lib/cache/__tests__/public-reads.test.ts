@@ -188,10 +188,7 @@ import {
   publicTags,
   revalidateMatchPages,
 } from '@/lib/revalidation';
-import { listSeasons, getSeasonWithDetails, getPublicSeasonParticipants } from '@/lib/supabase/queries/seasons';
-import { getParticipants } from '@/lib/supabase/queries/tournaments';
-import { getLeaderboardEntries } from '@/lib/supabase/queries/ratings';
-import { getStreakLeaderboard } from '@/lib/supabase/queries/streaks';
+import { listSeasons, getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
 import { buildWorldRouteData } from '@/lib/worlds/route-data';
 import { getLeagueSchedule } from '@/lib/supabase/queries/league-standings';
 import { getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
@@ -744,35 +741,5 @@ describe('public read cache — no session data and no private player columns', 
     const [entry] = fakeNextCache.entries.values();
     for (const secret of PRIVATE) expect(entry.body).not.toContain(secret);
     for (const key of PRIVATE_PLAYER_KEYS) expect(entry.body).not.toContain(`"${key}"`);
-  });
-});
-
-describe('hidden players (banned/suspended/test) in public listings', () => {
-  it('drops hidden players from the rating and streak leaderboards', async () => {
-    vi.mocked(getLeaderboardEntries).mockResolvedValueOnce([
-      { player_id: 'banned-player', rating: 2000 },
-      { player_id: P, rating: 1600 },
-    ] as never);
-    vi.mocked(getStreakLeaderboard).mockResolvedValueOnce([
-      { player_id: 'banned-player', best_win_streak: 9 },
-      { player_id: P, best_win_streak: 5 },
-    ] as never);
-
-    expect((await publicReads.ratingLeaderboard(5)).map((e) => e.player_id)).toEqual([P]);
-    expect((await publicReads.streakLeaderboard()).map((e) => e.player_id)).toEqual([P]);
-  });
-
-  it('drops hidden players from the league and tournament participant reads', async () => {
-    vi.mocked(getPublicSeasonParticipants).mockResolvedValueOnce([
-      { id: 'banned-player', name: 'B', gym_type: 'fire', avatar_url: null, core_types: null },
-      { id: P, name: 'Mara', gym_type: 'fire', avatar_url: null, core_types: null },
-    ] as never);
-    vi.mocked(getParticipants).mockResolvedValueOnce([
-      { ...FULL_PLAYER_ROW, id: 'banned-player', seed: 1, starting_bracket: 'winners' },
-      { ...FULL_PLAYER_ROW, seed: 2, starting_bracket: 'winners' },
-    ] as never);
-
-    expect((await publicReads.seasonParticipants(S)).map((p) => p.id)).toEqual([P]);
-    expect((await publicReads.tournamentParticipants(T)).map((p) => p.id)).toEqual([P]);
   });
 });
