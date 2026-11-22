@@ -9,6 +9,7 @@ const reads = vi.hoisted(() => ({
   tournamentList: vi.fn(),
   standingsPreview: vi.fn(),
   seasonStandingsPreview: vi.fn(),
+  hiddenPlayerIds: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: reads.mode }));

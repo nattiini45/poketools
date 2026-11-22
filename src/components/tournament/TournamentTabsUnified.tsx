@@ -11,6 +11,7 @@ import DecisionMatchPanel from '@/components/evolution/DecisionMatchPanel';
 import ScopedInsightsView from '@/components/insights/ScopedInsightsView';
 import TournamentReportTab from './TournamentReportTab';
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
+import { withoutHiddenIds, withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import type { MatchRecord } from '@/lib/tournament/types';
 import type { EvolutionStanding } from '@/lib/tournament/evolution-standings';
@@ -55,6 +56,8 @@ type TournamentTabsUnifiedProps = (
 ) & {
   bracketType: BracketType;
   participants: Participant[];
+  /** Players the public directory hides; the tabs' tables and pickers drop their rows. */
+  hiddenPlayerIds?: readonly string[];
   rounds: Round[];
   matches: TabsMatch[];
   matchRecords: MatchRecord[];
@@ -94,6 +97,7 @@ const ROUND_TONE: Record<Round['status'], SkewChipTone> = { active: 'live', pend
 export default function TournamentTabsUnified({
   bracketType,
   participants,
+  hiddenPlayerIds = [],
   rounds,
   matches,
   matchRecords,
@@ -166,14 +170,24 @@ export default function TournamentTabsUnified({
 
   const rrStandings = useMemo(() => {
     if (bracketType !== 'round_robin') return [];
-    return computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {
-      // 3 / 0 for every league type except Evolution Point Buy, which scores the format pack's match points.
-      ...roundRobinMatchPoints(seasonFormatType),
-      battleStats,
-      gamesByMatch,
-      maxRound,
-    }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit });
-  }, [bracketType, seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, battleStats, gamesByMatch, maxRound, participantGymTypes, evolutionPoints, tiebreakerOrder, kit]);
+    // Scored over every participant — a hidden player's matches still count
+    // for their opponents — then their own rows drop.
+    return withoutHiddenPlayers(
+      computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {
+        // 3 / 0 for every league type except Evolution Point Buy, which scores the format pack's match points.
+        ...roundRobinMatchPoints(seasonFormatType),
+        battleStats,
+        gamesByMatch,
+        maxRound,
+      }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit }),
+      hiddenPlayerIds,
+    );
+  }, [bracketType, seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, battleStats, gamesByMatch, maxRound, participantGymTypes, evolutionPoints, tiebreakerOrder, kit, hiddenPlayerIds]);
+
+  const visibleParticipants = useMemo(
+    () => withoutHiddenIds(participants, hiddenPlayerIds),
+    [participants, hiddenPlayerIds],
+  );
 
   const epbTiedPlayers = useMemo(() => {
     if (seasonFormatType !== 'evolution_point_buy') return [];
@@ -286,7 +300,7 @@ export default function TournamentTabsUnified({
           usageRows={usageRows}
           isDoubles={isDoubles}
           killRanking={killRanking}
-          participants={participants.map((p) => ({ id: p.id, name: p.name }))}
+          participants={visibleParticipants.map((p) => ({ id: p.id, name: p.name }))}
           tournamentId={tournamentId}
           phase={phase}
           aggregateScopeType={phase ? 'phase' : 'tournament'}
@@ -297,7 +311,7 @@ export default function TournamentTabsUnified({
       {/* Result matrix — round robin */}
       {show('matrix') && (
         <RoundRobinTable
-          participants={participants.map((p) => ({ id: p.id, name: p.name }))}
+          participants={visibleParticipants.map((p) => ({ id: p.id, name: p.name }))}
           matches={filteredMatches}
         />
       )}

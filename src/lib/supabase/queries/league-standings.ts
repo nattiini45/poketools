@@ -15,6 +15,7 @@ import { toPublicMatch, toPublicPhaseMatch, type PublicCompetitionMatch, type Pu
 import type { TournamentWithDetails } from '@/types/tournament';
 import type { PublicSeasonParticipant } from '@/lib/players/public-player';
 import { finalLeaguePlacings, groupStageIds, groupStageRanking } from '@/lib/tournament/league-placings';
+import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
 
 /**
  * Server-side league schedule + standings for the EvoLiga world.
@@ -227,6 +228,11 @@ export interface LeagueSchedulePreload {
   participants?: readonly LeagueScheduleParticipant[];
   context?: SeasonStandingsContext;
   groups?: readonly LeagueScheduleGroup[];
+  /** Ids of players the public directory hides (banned, suspended, test).
+   * Standings are computed over the full participant set — a hidden player's
+   * matches still count for their opponents — then their own rows drop out of
+   * the tables the schedule returns. */
+  hiddenPlayerIds?: readonly string[];
 }
 
 /** A league's groups narrowed to the public schedule shape (allowlist). */
@@ -260,7 +266,21 @@ export async function getLeagueSchedule(
     readsByes ? loadSeasonSwissByeRounds(seasonId) : undefined,
   ]);
 
-  return assembleLeagueSchedule({ stages, participants, matchesByStage, context, groups, byeRoundsByStage });
+  const schedule = assembleLeagueSchedule({ stages, participants, matchesByStage, context, groups, byeRoundsByStage });
+
+  const hiddenIds = preloaded.hiddenPlayerIds;
+  if (!hiddenIds?.length) return schedule;
+  return {
+    ...schedule,
+    standings: withoutHiddenPlayers(schedule.standings, hiddenIds),
+    finalPlacings: schedule.finalPlacings
+      ? withoutHiddenPlayers(schedule.finalPlacings, hiddenIds)
+      : undefined,
+    groupStandings: schedule.groupStandings?.map((group) => ({
+      ...group,
+      standings: withoutHiddenPlayers(group.standings, hiddenIds),
+    })),
+  };
 }
 
 /**

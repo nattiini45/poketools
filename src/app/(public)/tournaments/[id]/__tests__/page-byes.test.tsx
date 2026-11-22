@@ -20,6 +20,7 @@ const { reads, computeStandingsForFormat } = vi.hoisted(() => ({
     seasonRow: vi.fn(),
     seasonEvolutionPoints: vi.fn(),
     seasonFormatRules: vi.fn(),
+    hiddenPlayerIds: vi.fn(async () => []),
   },
   computeStandingsForFormat: vi.fn(() => []),
 }));

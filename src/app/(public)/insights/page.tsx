@@ -15,7 +15,7 @@ import { phasePublicReads } from '@/lib/cache/phase-public-reads';
 import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { phaseStatsHref } from '@/lib/league-phase/paths';
 import { findNativePhaseAliasOwner } from '@/lib/supabase/queries/phase-route-owners';
-import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
+import { withoutHiddenIds, withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { loadSupplement, packExtensions } from '@/lib/pack-extensions';
 import type { SupplementaryKillRowView } from '@/components/supplementary/SupplementaryKillRanking';
 import {
@@ -296,6 +296,14 @@ async function InsightsPageContent({ searchParams }: PageProps) {
     );
   }
 
+  // The scope's table was scored over every participant — a hidden player's
+  // matches still count for their opponents — so only their own rows drop.
+  const scopeRows = {
+    ...scopeData,
+    participants: withoutHiddenIds(scopeData.participants, hiddenPlayerIds),
+    standings: withoutHiddenPlayers(scopeData.standings, hiddenPlayerIds),
+  };
+
   // The public list includes test leagues; the stats scope picker never offers one.
   const leagueOptions = insightsLeagueOptions(leagues);
   const listedTournaments = tournaments.map((t) => ({ id: t.id, name: t.name }));
@@ -321,9 +329,9 @@ async function InsightsPageContent({ searchParams }: PageProps) {
         usageRows={scopeData.usageRows}
         history={scopeData.history}
         isDoubles={scopeData.isDoubles}
-        standings={scopeData.standings}
+        standings={scopeRows.standings}
         killRanking={scopeData.killRanking}
-        participants={scopeData.participants}
+        participants={scopeRows.participants}
         tournamentId={scopeData.tournamentId}
         aggregateScopeType={scopeData.aggregateScopeType}
         aggregateScopeId={scopeData.aggregateScopeId}

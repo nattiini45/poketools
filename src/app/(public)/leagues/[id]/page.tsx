@@ -11,6 +11,7 @@ import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import { isDraftLike, isLeagueDoubles } from '@/lib/season/format-utils';
+import { withoutHiddenIds } from '@/lib/players/hidden-players';
 import { getSessionPlayer } from '@/lib/auth/helpers';
 import { getPlayerWorldExperience } from '@/lib/supabase/queries/players';
 import { DEFAULT_WORLD_EXPERIENCE, type WorldExperience } from '@/types/player';
@@ -124,12 +125,16 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
 
   // The viewer's language is a cookie read (no query); every visible word
   // below and in the hub follows it, whatever the world.
-  const [stages, participants, sessionPlayer, locale] = await Promise.all([
+  const [stages, participants, sessionPlayer, locale, hiddenPlayerIds] = await Promise.all([
     native ? phasePublicReads.bySeasonIds([id]).then((rows) => rows[id] ?? []) : publicReads.seasonStages(id),
     publicReads.seasonParticipants(id),
     getSessionPlayer(),
     getLocale(),
+    publicReads.hiddenPlayerIds(),
   ]);
+  // Banned/suspended/test players drop out of every participant list the page
+  // shows; their matches still count in the standings the preloads compute.
+  const visibleParticipants = withoutHiddenIds(participants, hiddenPlayerIds);
   const t = createTranslator(leaguesMessages, locale);
   const nativePreload = native ? { storage: 'phase' as const } : {};
 
@@ -155,7 +160,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     // (see `loadLeagueHubPanel`).
     const hubTabs = availableLeagueHubTabs(stages, { reports: ENABLE_KALE_CABBAGE });
     const hubTab = parseLeagueHubTab(query[LEAGUE_HUB_TAB_PARAM], hubTabs);
-    const routeDataRead = publicReads.worldRouteData(id, { league, stages, participants, hasDraftPool, ...nativePreload });
+    const routeDataRead = publicReads.worldRouteData(id, { league, stages, participants, hasDraftPool, hiddenPlayerIds, ...nativePreload });
     const [routeData, worldExperience, hubPanel] = await Promise.all([
       routeDataRead,
       sessionPlayer
@@ -164,7 +169,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
             return DEFAULT_WORLD_EXPERIENCE;
           })
         : Promise.resolve<WorldExperience>(DEFAULT_WORLD_EXPERIENCE),
-      loadLeagueHubPanel(hubTab, { seasonId: id, league, stages, participants, routeData: routeDataRead, ...nativePreload }),
+      loadLeagueHubPanel(hubTab, { seasonId: id, league, stages, participants, hiddenPlayerIds, routeData: routeDataRead, ...nativePreload }),
     ]);
     if (!routeData || !hubPanel) notFound();
 
@@ -189,7 +194,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
             {...nativePreload}
             league={league}
             stages={stages}
-            participants={participants}
+            participants={visibleParticipants}
             locale={locale}
             query={query}
             tabs={hubTabs}
@@ -236,8 +241,8 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     ),
     Promise.all(stages.map((stage) => native ? phasePublicReads.reports(stage.id) : publicReads.tournamentReports(stage.id))),
     native
-      ? publicReads.worldRouteData(id, { league, stages, participants, hasDraftPool, storage: 'phase' })
-      : publicReads.leagueSchedule(id, { stages, participants }),
+      ? publicReads.worldRouteData(id, { league, stages, participants, hasDraftPool, storage: 'phase', hiddenPlayerIds })
+      : publicReads.leagueSchedule(id, { stages, participants, hiddenPlayerIds }),
   ]);
   if (!schedule) notFound();
 
@@ -248,7 +253,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
   const isDoubles = isLeagueDoubles(league.format_type, stages);
 
   // Build gym type lookup: player_id → gym_type
-  const gymTypeMap = new Map(participants.map((p) => [p.id, p.gym_type]));
+  const gymTypeMap = new Map(visibleParticipants.map((p) => [p.id, p.gym_type]));
 
   const draftLinks = isDraftLike(league.format_type)
     ? [
@@ -293,7 +298,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
         fixtures={schedule.fixtures}
         typeCoreParticipants={
           caps.typeCores
-            ? participants.map((p) => ({
+            ? visibleParticipants.map((p) => ({
                 id: p.id,
                 name: p.name,
                 coreTypes: p.core_types,

@@ -142,6 +142,8 @@ const EPB_TABLE_STAGES = ['e-stage-1', 'e-stage-2'];
 const EPB_STAGES = [...EPB_TABLE_STAGES, PLAYOFF_STAGE];
 const SAKURA_STAGES = ['s-stage-1', SWISS_STAGE];
 const ALL = ['p1', 'p2', 'p3', 'p4'];
+// p2 is suspended and p3 a test account: the public hub drops their rows.
+const VISIBLE = ['p1', 'p4'];
 /** Playoff seeding differs from the season order, so seed order is observable. */
 const PLAYOFF_SEEDING = ['p4', 'p1', 'p2', 'p3'];
 
@@ -383,6 +385,8 @@ const EPB_BASE_TABLES = [
   'evolution_tracker',
   'format_rules',
   'matches',
+  // The hidden-player list (banned/suspended/test ids) the standings filter by.
+  'players',
   'point_buy_list_entries',
   // League groups: the group tables of the standings (none in these fixture leagues; one read).
   'season_groups',
@@ -630,7 +634,8 @@ describe('league hub — the default tab keeps the bare league budget', () => {
       const panel = panelOf(hub, 'standings');
       // Rendered from the world payload alone: the very same standings rows.
       expect(panel.standings).toEqual((worldOf(page).props.data as { standings: unknown }).standings);
-      expect(panel.standings.length).toBe(4);
+      // The fixture's suspended and test players (p2, p3) drop out of the table.
+      expect(panel.standings.length).toBe(2);
       expect(panel.isEvolutionPointBuy).toBe(epb);
     }
   });
@@ -638,8 +643,8 @@ describe('league hub — the default tab keeps the bare league budget', () => {
   it('sakura: a bare URL stays within the world budget and the hub speaks English', async () => {
     const page = await renderPage(SAKURA_SEASON_ID);
 
-    // Plain Sakura plus one rounds read for the Swiss stage's byes.
-    expect(fake.current!.queries).toHaveLength(10);
+    // Plain Sakura plus one rounds read for the Swiss stage's byes and the hidden-player list.
+    expect(fake.current!.queries).toHaveLength(11);
     expect(tablesRead().filter((table) => table === 'rounds')).toHaveLength(1);
     expectNoStatsReads();
     expect(componentName(worldOf(page))).toBe('SakuraWorld');
@@ -756,15 +761,15 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
         matches: t.matches.map((m) => m.id),
       })),
     ).toEqual([
-      { name: 'Gruppe A', members: ['p1', 'p2'], matches: ['m1'] },
-      { name: 'Gruppe B', members: ['p3', 'p4'], matches: ['m2'] },
+      { name: 'Gruppe A', members: ['p1'], matches: ['m1'] },
+      { name: 'Gruppe B', members: ['p4'], matches: ['m2'] },
     ]);
     expect(grouped.tables[0].standings[0].player_id).toBe('p1');
     expect(grouped.tables[1].standings[0].player_id).toBe('p4');
     // Ungrouped round robin: one table over the stage enrollment.
     expect(ungrouped.tables).toHaveLength(1);
     expect(ungrouped.tables[0].name).toBeNull();
-    expect(ungrouped.tables[0].members.map((m) => m.id).sort()).toEqual(ALL);
+    expect(ungrouped.tables[0].members.map((m) => m.id).sort()).toEqual(VISIBLE);
     expect(ungrouped.tables[0].matches.map((m) => m.id)).toEqual(['m5', 'm6', 'm7']);
   });
 
@@ -799,7 +804,7 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
     // The Swiss stage has no group rows: one table over its enrollment.
     expect(panel.stages[1].tables).toHaveLength(1);
     expect(panel.stages[1].tables[0].name).toBeNull();
-    expect(panel.stages[1].tables[0].members.map((m) => m.id).sort()).toEqual(ALL);
+    expect(panel.stages[1].tables[0].members.map((m) => m.id).sort()).toEqual(VISIBLE);
   });
 
   it('groups (sakura): a grouped Swiss stage gets one Swiss table per group', async () => {
@@ -822,8 +827,8 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
     expect(
       swiss.tables.map((t) => ({ key: t.key, name: t.name, members: t.members.map((m) => m.id).sort() })),
     ).toEqual([
-      { key: 'sw-grp-1', name: 'Pool 1', members: ['p1', 'p3'] },
-      { key: 'sw-grp-2', name: 'Pool 2', members: ['p2', 'p4'] },
+      { key: 'sw-grp-1', name: 'Pool 1', members: ['p1'] },
+      { key: 'sw-grp-2', name: 'Pool 2', members: ['p4'] },
     ]);
     // Nothing played yet: Swiss rows, all level.
     for (const table of swiss.tables) {
@@ -870,8 +875,6 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
     expect(panel.phases[0].groups.map((g) => g.name)).toEqual(['Gruppe A', 'Gruppe B']);
     expect(panel.phases[0].groups.flatMap((g) => g.members)).toEqual([
       { player_id: 'p1', player_name: 'Mara Feldkamp', seed: 1, gym_type: 'Fire' },
-      { player_id: 'p2', player_name: 'Jonas Riedl', seed: 2, gym_type: 'Water' },
-      { player_id: 'p3', player_name: 'Lea Brandt', seed: 1, gym_type: null },
       { player_id: 'p4', player_name: 'Timo Kessler', seed: 2, gym_type: 'Grass' },
     ]);
   });
@@ -906,7 +909,6 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
     ]);
     expect(panel.phases[1].groups[0].members).toEqual([
       { player_id: 'p1', player_name: 'Mara Feldkamp', seed: 1, gym_type: 'Dragon' },
-      { player_id: 'p3', player_name: 'Lea Brandt', seed: 2, gym_type: 'Ice' },
     ]);
   });
 
@@ -934,8 +936,6 @@ describe('league hub — each tab adds only its own reads (EPB, anonymous, cold)
     const members = panelOf(hubOf(page), 'phases').phases[0].groups.flatMap((g) => g.members);
     expect(members.map((m) => [m.player_id, m.player_name])).toEqual([
       ['p1', 'Mara Neuhaus'],
-      ['p2', 'Jonas Riedl'],
-      ['p3', 'Lea Brandt'],
       ['p4', 'Timo Kessler'],
     ]);
   });
@@ -1075,9 +1075,9 @@ describe('league hub — an unknown or unavailable tab falls back to the default
     const playoffs = await coldRender(SAKURA_SEASON_ID, { tab: 'playoffs' });
 
     expect(readShapes(playoffs.queries)).toEqual(readShapes(bare.queries));
-    // The bare sakura budget, incl. the stage-row team-lead read (spec §7 facts embedded), the league-groups read
-    // and the Swiss stage's bye rounds.
-    expect(playoffs.queries).toHaveLength(10);
+    // The bare sakura budget, incl. the stage-row team-lead read (spec §7 facts embedded), the league-groups read,
+    // the hidden-player list and the Swiss stage's bye rounds.
+    expect(playoffs.queries).toHaveLength(11);
     expectNoStatsReads();
 
     const hub = hubOf(playoffs.page);
@@ -1263,11 +1263,14 @@ describe('league hub — warm renders', () => {
         `season:${EPB_SEASON_ID}`,
         `aggregates:league:${EPB_SEASON_ID}`,
         ...EPB_STAGES.map((id) => `tournament:${id}`),
+        // The hidden-player list is one global entry, expired by a player write.
+        'players',
       ];
       expect(fakeNextCache.reads.length).toBeGreaterThan(0);
       for (const read of fakeNextCache.reads) {
         expect(read.tags.some((tag) => owners.includes(tag))).toBe(true);
-        expect(read.revalidate).toBe(30);
+        // The global hidden-player list carries the list TTL, not the detail one.
+        expect(read.revalidate).toBe(read.keyParts.includes('hidden-player-ids') ? 60 : 30);
       }
     },
   );

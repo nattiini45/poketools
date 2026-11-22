@@ -8,6 +8,7 @@ const reads = vi.hoisted(() => ({
   },
   league: {
     seasonGymTypes: vi.fn(), aggregatesSummary: vi.fn(), totalGames: vi.fn(), seasonRow: vi.fn(),
+    hiddenPlayerIds: vi.fn(async () => []),
     seasonEvolutionPoints: vi.fn(), seasonFormatRules: vi.fn(), seasonKitStandings: vi.fn(),
     tournamentMatches: vi.fn(), tournamentMatchRecords: vi.fn(),
   },
@@ -31,7 +32,7 @@ beforeEach(() => {
 
 afterEach(() => vi.resetAllMocks());
 
-it('loads the native page with nine read calls and derives records from the matches it already owns', async () => {
+it('loads the native page with ten read calls and derives records from the matches it already owns', async () => {
   const data = await loadNativePhasePageData(phase, false);
   expect(data?.matchRecords).toEqual([{
     match_id: 'match-id', round_number: 2, player_1_id: 'player-a', player_2_id: 'player-b',
@@ -41,7 +42,7 @@ it('loads the native page with nine read calls and derives records from the matc
   expect(reads.league.totalGames).toHaveBeenCalledExactlyOnceWith('phase', phase.id);
   const calls = [...Object.values(reads.phase), ...Object.values(reads.league), reads.ruleset]
     .reduce((sum, read) => sum + read.mock.calls.length, 0);
-  expect(calls).toBe(9);
+  expect(calls).toBe(10);
   expect(reads.league.tournamentMatches).not.toHaveBeenCalled();
   expect(reads.league.tournamentMatchRecords).not.toHaveBeenCalled();
   expect(reads.phase.reports).not.toHaveBeenCalled();

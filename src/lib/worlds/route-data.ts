@@ -40,6 +40,7 @@ import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { listSeasonTeamLeadsWithFacts, type TeamLead } from '@/lib/supabase/queries/teams';
 import { selectAnonymousVisibleLeads } from '@/lib/team/visibility';
 import { getPublicSeasonParticipants, getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
+import { withoutHiddenIds, withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { getStagesBySeasonId } from '@/lib/supabase/queries/tournaments';
 import { getSeasonWorld } from './registry';
 import type { SeasonWorld } from './types';
@@ -325,6 +326,11 @@ export interface WorldRouteDataPreload {
   participants: readonly PublicSeasonParticipant[];
   storage?: 'legacy' | 'phase';
   hasDraftPool?: boolean;
+  /** Ids of players the public directory hides (banned, suspended, test). Their
+   * rows drop out of the participant lists and standings, but their recorded
+   * matches still count for the opponents' tables — the schedule is built from
+   * the full set and the rows are dropped after it is computed. */
+  hiddenPlayerIds?: readonly string[];
 }
 
 /**
@@ -418,15 +424,19 @@ export async function buildWorldRouteData(
     byeRoundsByStage,
   });
 
+  const hiddenIds = preloaded?.hiddenPlayerIds ?? [];
   return assembleWorldRouteData({
     league: native ? { ...league, tournament_count: stages.length } : league,
     stages,
-    participants,
+    participants: withoutHiddenIds(participants, hiddenIds),
     rosterLines: pointBuyEntries,
     trackers: evolutionTrackers,
-    standings: schedule.standings,
-    finalPlacings: schedule.finalPlacings,
-    groupStandings: schedule.groupStandings,
+    standings: withoutHiddenPlayers(schedule.standings, hiddenIds),
+    finalPlacings: schedule.finalPlacings ? withoutHiddenPlayers(schedule.finalPlacings, hiddenIds) : undefined,
+    groupStandings: schedule.groupStandings?.map((group) => ({
+      ...group,
+      standings: withoutHiddenPlayers(group.standings, hiddenIds),
+    })),
     standingsRanking: schedule.standingsRanking,
     fixtures: schedule.fixtures,
     formatRules,

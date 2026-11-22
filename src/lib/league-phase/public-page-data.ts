@@ -14,7 +14,7 @@ export async function loadNativePhasePageData(
   const epb = isEvolutionPointBuy(phase.season_format_type ?? '');
   const [
     rounds, matches, participants, ruleset, battleStats, participantGymTypes, reports, aggregates,
-    totalGamesInScope, season, evolutionPoints, formatRules, seasonKit,
+    totalGamesInScope, season, evolutionPoints, formatRules, seasonKit, hiddenPlayerIds,
   ] = await Promise.all([
     phasePublicReads.rounds(id),
     phasePublicReads.matches(id),
@@ -29,6 +29,7 @@ export async function loadNativePhasePageData(
     epb ? publicReads.seasonEvolutionPoints(seasonId) : undefined,
     epb ? publicReads.seasonFormatRules(seasonId) : null,
     phase.season_format_type === 'custom' ? phasePublicReads.seasonKitStandings(seasonId) : null,
+    publicReads.hiddenPlayerIds(),
   ]);
   if (!season) return null;
   const matchRecords: MatchRecord[] = [];
@@ -43,7 +44,7 @@ export async function loadNativePhasePageData(
   }
   return {
     rounds, matches, participants, matchRecords, ruleset, battleStats, participantGymTypes, reports,
-    aggregates, totalGamesInScope, season, evolutionPoints,
+    aggregates, totalGamesInScope, season, evolutionPoints, hiddenPlayerIds,
     tiebreakerOrder: formatRules?.tiebreaker_order,
     kit: kitForPhase(seasonKit, id),
   };
