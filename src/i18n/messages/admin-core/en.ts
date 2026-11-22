@@ -39,6 +39,7 @@ const auditActions = {
   game__edit: 'Game edited',
   game__delete: 'Game deleted',
   game__import_replay: 'Replay imported',
+  game__player_report: 'Result reported by a player',
   match__reset: 'Match reset',
   match__schedule: 'Match schedule changed',
   match__dispute: 'Match disputed',
