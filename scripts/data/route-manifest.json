@@ -611,13 +611,13 @@
       "expires": ["expirePhaseReads"],
       "audit": ["bracket.generate"],
       "emits": ["emitPhaseDiscordEvent(round_generated)", "emitPhaseSocialEvent(round_generated)"],
-      "importFingerprint": "75f1f1ab167ef9b2",
+      "importFingerprint": "e9ad45012ef3ae93",
       "importFiles": 560,
       "imports": {
-        "src/app/api/seasons/[id]/phases/[phaseId]/generate-bracket/kit-start.ts": { "names": ["loadNativeKitBracket"], "closure": "3c027b47ca3cd10b", "files": 551 },
+        "src/app/api/seasons/[id]/phases/[phaseId]/generate-bracket/kit-start.ts": { "names": ["loadNativeKitBracket"], "closure": "cfecda1267a3d56d", "files": 551 },
         "src/app/api/seasons/[id]/phases/[phaseId]/rounds/_lib/scope.ts": {
           "names": ["invalidPhaseRoundPath", "loadRoundPhase", "phaseRoundError"],
-          "closure": "0dd5a214e3b9e1ed",
+          "closure": "5f1188ab3672328d",
           "files": 105
         },
         "src/i18n/core.ts": { "names": ["createTranslator"], "closure": "1195933682b46cc8", "files": 4 },
@@ -625,7 +625,7 @@
         "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/audit/agent-context.ts": { "names": ["getAgentAuditContext"], "closure": "1890b322bb61ff2c", "files": 1 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
-        "src/lib/auth/helpers.ts": { "names": ["requirePlayer"], "closure": "c9182c1621e41838", "files": 81 },
+        "src/lib/auth/helpers.ts": { "names": ["requirePlayer"], "closure": "c849358a81e9d05a", "files": 81 },
         "src/lib/discord/notify.ts": { "names": ["emitPhaseDiscordEvent"], "closure": "e078da65e244b364", "files": 89 },
         "src/lib/league-phase/bracket-persistence.ts": {
           "names": ["createNativeBracketPersistence", "isInitialClassicPhaseBracket"],
