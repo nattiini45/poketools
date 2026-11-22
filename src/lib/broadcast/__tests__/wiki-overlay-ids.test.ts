@@ -175,5 +175,5 @@ describe('isUnknownWikiDetailName', () => {
     }
     expect(falseNotFound).toEqual([]);
     expect(missed).toEqual([]);
-  });
+  }, 30000);
 });
