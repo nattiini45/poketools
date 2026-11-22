@@ -1,6 +1,6 @@
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
-import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
+import { requireLiveIdentityOrSignIn, redirectUnregisteredPlayerToDashboard } from '@/lib/auth/redirect-to-sign-in';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
 import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
@@ -26,7 +26,7 @@ interface PageProps {
 export default async function ConfirmMatchPage({ params }: PageProps) {
   const { mid } = await params;
   const { player } = await requireLiveIdentityOrSignIn();
-  if (!player) redirect('/');
+  if (!player) redirectUnregisteredPlayerToDashboard();
 
   const owner = await resolveIdOnlyMatchRoute(mid.toLowerCase());
   if (!owner) notFound();

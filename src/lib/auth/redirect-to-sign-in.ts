@@ -44,3 +44,11 @@ export async function requireLiveIdentityOrSignIn(returnTo?: string): Promise<Li
   if (!access) return redirectToSignIn(returnTo);
   return access;
 }
+/**
+ * The destination for a signed-in identity whose session links no player: `/dashboard`, which explains the
+ * not-registered state (issue #142). After a `getLiveAccess`/`requireLiveIdentityOrSignIn` read passes,
+ * `player: null` is exactly that case — the signed-out visitor went to sign-in already.
+ */
+export function redirectUnregisteredPlayerToDashboard(): never {
+  return redirect('/dashboard');
+}
