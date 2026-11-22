@@ -93,11 +93,10 @@ function snapshotSideConditions(
 }
 
 function snapshotSide(side: InstanceType<typeof Battle>['p1']): SideFrame {
-  const activePokemon = side.active[0] ?? null;
-
   return {
     name: side.name as string || '',
-    active: snapshotPokemon(activePokemon),
+    // Every active slot, not only the first: a doubles replay shows both (issue #136).
+    active: side.active.map(snapshotPokemon),
     team: side.team.map(snapshotTeamMember),
     sideConditions: snapshotSideConditions(
       side.sideConditions as Record<string, { name?: string; level?: number }>

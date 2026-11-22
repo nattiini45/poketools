@@ -58,7 +58,8 @@ export interface SideConditionFrame {
 
 export interface SideFrame {
   name: string;
-  active: ActivePokemonFrame | null;
+  /** One entry per active slot — a doubles side lists both; a null entry is an empty slot (issue #136). */
+  active: (ActivePokemonFrame | null)[];
   team: TeamMemberFrame[];
   sideConditions: SideConditionFrame[];
 }
