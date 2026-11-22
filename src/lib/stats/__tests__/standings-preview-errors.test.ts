@@ -10,6 +10,7 @@ const h = vi.hoisted(() => ({
   getCompletedMatchRecordsBatch: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/players', () => ({ getHiddenPlayerIds: vi.fn().mockResolvedValue([]) }));
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     from: (table: string) => {

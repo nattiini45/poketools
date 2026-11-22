@@ -13,6 +13,7 @@ const queries = vi.hoisted(() => ({
   getGroupsByPhase: vi.fn(),
   getPhaseReports: vi.fn(),
   getNativeLeagueStandingsPreview: vi.fn(),
+  getHiddenPlayerIds: vi.fn(),
 }));
 
 vi.mock('@/lib/stats/standings-preview', () => ({ getNativeLeagueStandingsPreview: queries.getNativeLeagueStandingsPreview }));
@@ -30,6 +31,7 @@ vi.mock('@/lib/supabase/queries/phase-matches', () => ({
 }));
 vi.mock('@/lib/supabase/queries/phase-groups', () => ({ getGroupsByPhase: queries.getGroupsByPhase }));
 vi.mock('@/lib/supabase/queries/phase-reports', () => ({ getPhaseReports: queries.getPhaseReports }));
+vi.mock('@/lib/supabase/queries/players', () => ({ getHiddenPlayerIds: queries.getHiddenPlayerIds }));
 
 import { expirePhaseReads, expirePublicTags, publicTags } from '@/lib/revalidation';
 import { phasePublicReads } from '../phase-public-reads';
@@ -86,6 +88,7 @@ beforeEach(() => {
   queries.getPhaseHeadToHead.mockResolvedValue([MATCH]);
   queries.getPhaseMatchById.mockResolvedValue(MATCH);
   queries.getPhaseParticipants.mockResolvedValue([PARTICIPANT]);
+  queries.getHiddenPlayerIds.mockResolvedValue([]);
   queries.getGroupsByPhase.mockResolvedValue([GROUP]);
   queries.getPhaseReports.mockResolvedValue([REPORT, { ...REPORT, id: 'failed', status: 'failed' }]);
 });
