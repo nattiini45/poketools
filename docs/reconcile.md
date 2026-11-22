@@ -17,11 +17,13 @@ src/lib/reconcile/
 ├── entity-delete-rebuild.ts  # Derived-data rebuild after tournament/season hard-delete
 ├── evolution-rebuild.ts      # Chronological EPB evolution rebuild engine (spec §20)
 ├── reconcile-season.ts       # Season derived-data orchestrator: verify + repair (spec §22)
+├── reconcile-streaks.ts      # Streaks-only scope: per-player stored-vs-replay diff, repair via recomputeStreaks
 └── __tests__/
     ├── entity-delete-rebuild.test.ts
     ├── evolution-rebuild.test.ts
     ├── reconcile-season-serialize.test.ts
-    └── reconcile-season.test.ts
+    ├── reconcile-season.test.ts
+    └── reconcile-streaks.test.ts
 ```
 
 ## Core Functions/Classes
@@ -58,7 +60,7 @@ src/lib/reconcile/
   2. Ratings: compute curve, diff stored vs. computed per player.
   3. Aggregates: rebuild `league` scope (repair-only; `all_time` is a separate global operation).
   4. Streaks: `recomputeStreaks` per player: each row is rebuilt from the player's whole completed history in one fenced write (no zeroed row in between, no achievements, no events; see [Gamification](./gamification.md)). Repair-only: a dry run reports no streak mismatches.
-     - **Rebuilding every player's streaks** (after the 2026-11 streak fix): run the reconcile with `scope: "all"`, `repair: true`, dry run first, never `POST /api/admin/backfill-gamification`. It covers every player of a league and every player with a completed match in one; a player whose matches are all in standalone tournaments is in no league and is skipped, so compare the `player_streaks` rows with the report afterwards (the player's next finalized match rebuilds the row anyway).
+     - **Rebuilding every player's streaks** (after the 2026-11 streak fix): run the reconcile with `scope: "streaks"`, `repair: true`, dry run first, never `POST /api/admin/backfill-gamification` or `scope: "all"` (which also rebuilds ratings and aggregates). The streaks scope covers every player of a league and every player with a completed match in one; a player whose matches are all in standalone tournaments is in no league and is skipped, so compare the `player_streaks` rows with the report afterwards (the player's next finalized match rebuilds the row anyway).
   5. Aggregate the `ReconcileReport` (dry-run reports mismatches; repair rewrites).
 - **Non-transactional**: each rebuilder manages its own writes sequentially; a mid-sequence failure leaves later rebuilders unrun and is completed on re-run.
 - **Ratings are written atomically per player**: `rebuildRatingsForPlayers` writes each player's `player_ratings` row and whole `rating_history` in one SQL transaction (`rating_replace_player_history`), runs players strictly in order, and queues every rebuild in the process behind the previous one.
@@ -76,7 +78,8 @@ src/lib/reconcile/
 
 ## API Routes
 ### Admin Reconcile
-- `POST /api/admin/reconcile` — dry-run or `repair` reconcile; `scope` = `season` (needs `season_id`) or `all`
+- `POST /api/admin/reconcile` — dry-run or `repair` reconcile; `scope` = `season` (needs `season_id`), `all`, or `streaks`
+  - `streaks` writes only `player_streaks`: the dry run diffs each player's stored row against the `computeStreaksFromHistory` replay and reports `status: 'stale' | 'current'` plus `mismatchedFields` per player; `repair` calls `recomputeStreaks` per player (one fenced write) and audits one `match.repair` event naming the scope. `season_id` is optional — absent means every player (the union of each season's roster and completed-match players, plus EPB tracker players), present narrows to that season's set. The rating, aggregate and evolution rebuilders are never invoked.
 
 ### League trash
 - `DELETE /api/seasons/[id]` — site admin; runs `rebuildAfterSeasonDelete` after the league moved to the trash
