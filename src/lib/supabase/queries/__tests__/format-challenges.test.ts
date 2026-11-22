@@ -75,6 +75,7 @@ const EXPECTED_STATUS: Record<FormatChallengeErrorCode, number> = {
   challenge_expired: 409,
   challenge_player_not_enrolled: 409,
   challenge_not_ladder: 409,
+  challenge_pair_in_round: 409,
 };
 
 const signal = (message: string, code = 'P0001') => ({ code, message, details: null });

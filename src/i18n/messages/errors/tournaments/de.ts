@@ -71,6 +71,7 @@ export default defineDe<typeof en>()({
     other: 'Diese Runde wiederholt {count} frühere Paarungen: Es waren keine anderen Gegner mehr frei.',
   },
   rounds_round_already_written: '{round} gibt es schon mit ihren Matches. Lösche sie, um sie neu zu erstellen.',
+  rounds_pair_already_in_round: '{round} hat für eine dieser Paarungen schon ein Match. Es wurde nichts geschrieben.',
   round_matches_unfinished: {
     one: '{round} hat noch {count} unfertiges Match. Schließe es ab oder beende die Runde trotzdem mit einer Begründung.',
     other: '{round} hat noch {count} unfertige Matches. Schließe sie ab oder beende die Runde trotzdem mit einer Begründung.',

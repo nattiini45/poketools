@@ -174,6 +174,13 @@ function isPhaseGroupsStale(error: { code?: string; message?: string }): boolean
 export const ROUNDS_TOURNAMENT_ROUND_NUMBER_KEY = 'rounds_tournament_round_number_key';
 
 /**
+ * UNIQUE (round_id, least(player_1_id, player_2_id), greatest(player_1_id, player_2_id)) on `matches` for the
+ * non-bracket rows (supabase/migrations/20261122090000_matches_round_pair_unique.sql): a second match for one
+ * pairing in one round, the backstop behind `round_write`'s own serialization.
+ */
+export const MATCHES_ROUND_PAIR_UNIQUE = 'matches_round_pair_unique';
+
+/**
  * A concurrent (or repeated) generation wrote this round number first. The losing request wrote nothing
  * for the round, so the client reloads and, if the round is wrong, deletes it before generating again.
  * HTTP 409, code `rounds_round_already_written`.
@@ -198,6 +205,15 @@ function mapRoundWriteError(error: { code?: string; message?: string }, roundNam
   if (isUniqueViolationOf(error, ROUNDS_TOURNAMENT_ROUND_NUMBER_KEY)) {
     console.error(`[${tag}] round "${roundName}" of the tournament already exists (concurrent generation)`, error);
     return new RoundAlreadyWrittenError(roundName);
+  }
+  // Two pairings of one match plan, or a pairing another writer already put in the round (issue #131).
+  if (isUniqueViolationOf(error, MATCHES_ROUND_PAIR_UNIQUE)) {
+    console.error(`[${tag}] a pairing of round "${roundName}" already holds a match (concurrent generation)`, error);
+    return new UserFacingError(`${roundName} already holds a match for one of these pairings. Nothing was written.`, {
+      code: 'rounds_pair_already_in_round',
+      params: { round: roundName },
+      status: 409,
+    });
   }
   if (isPhaseGroupsStale(error)) {
     console.error(`[${tag}] phase groups changed before the first round:`, error);
