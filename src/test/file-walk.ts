@@ -14,7 +14,7 @@
  *
  * `walkStats` counts the real work so a test can prove the walk ran once.
  */
-import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll } from 'vitest';
 
@@ -37,10 +37,15 @@ type DiskCache = Record<string, CacheEntry>;
 let disk: DiskCache | undefined;
 let dirty = false;
 
+function parseCache(raw: string): DiskCache {
+  const parsed: unknown = JSON.parse(raw);
+  return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) ? (parsed as DiskCache) : {};
+}
+
 function diskCache(): DiskCache {
   if (disk === undefined) {
     try {
-      disk = JSON.parse(readFileSync(CACHE_FILE, 'utf8')) as DiskCache;
+      disk = parseCache(readFileSync(CACHE_FILE, 'utf8'));
     } catch {
       disk = {};
     }
@@ -51,16 +56,20 @@ function diskCache(): DiskCache {
 function flushTextCache(): void {
   if (!dirty || disk === undefined) return;
   try {
-    // Sibling test files may have written entries since this file loaded: merge over them.
+    // Sibling test files may have written entries since this file loaded: merge over them, and
+    // replace the file atomically so a concurrent flush never leaves a torn JSON behind. A lost
+    // entry is still possible between the merge read and the rename — a cache miss, never a failure.
     let merged: DiskCache = {};
     try {
-      merged = JSON.parse(readFileSync(CACHE_FILE, 'utf8')) as DiskCache;
+      merged = parseCache(readFileSync(CACHE_FILE, 'utf8'));
     } catch {
       /* first writer */
     }
     Object.assign(merged, disk);
     mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
-    writeFileSync(CACHE_FILE, JSON.stringify(merged));
+    const tmp = `${CACHE_FILE}.${process.pid}.tmp`;
+    writeFileSync(tmp, JSON.stringify(merged));
+    renameSync(tmp, CACHE_FILE);
     dirty = false;
   } catch {
     /* a cache must never fail a test run */
@@ -109,7 +118,8 @@ const dirLists = new Map<string, string[]>();
 
 /**
  * Every file under `dir` (node_modules, .next and dot-named entries skipped), enumerated once per
- * process per dir; `include` filters on the repo-relative `/`-separated path afterwards.
+ * test file per dir (vitest isolates each file's module state); `include` filters on the
+ * repo-relative `/`-separated path afterwards.
  */
 export function sourceFiles(dir: string, include: (rel: string) => boolean = () => true): string[] {
   let files = dirLists.get(dir);
