@@ -22,9 +22,12 @@ import type { SpriteStylePreference } from '@/lib/pkmn/sprite-styles';
 export default function SpriteStyleSettingsForm({
   stored,
   readFailed,
+  previewSpecies,
 }: {
   stored: SpriteStylePreference | null;
   readFailed: boolean;
+  /** Preview species' localized name, resolved server-side where the dictionary lives. */
+  previewSpecies?: string;
 }) {
   const t = useT(spriteStyleMessages);
   const errorText = useApiErrorText();
@@ -50,6 +53,7 @@ export default function SpriteStyleSettingsForm({
         legendClassName="sr-only"
         value={preference}
         onChange={(next) => void change(next)}
+        previewSpecies={previewSpecies}
       />
       <p aria-live="polite" className="min-h-5 pt-2 text-caption text-fg-muted">
         {pending ? t('saving') : saved ? t('saved') : ''}

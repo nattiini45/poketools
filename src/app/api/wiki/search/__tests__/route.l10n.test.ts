@@ -20,17 +20,27 @@ async function search(params: Record<string, string>): Promise<Hit[]> {
 describe('GET /api/wiki/search (real data, DE/EN)', () => {
   it('"Feuer" finds the Fire tera type', async () => {
     const hits = await search({ q: 'Feuer', type: 'tera' });
-    expect(hits[0]).toEqual({ type: 'tera', name: 'Fire', shortDesc: '' });
+    expect(hits[0]).toMatchObject({ type: 'tera', name: 'Fire', shortDesc: '', label: 'Fire' });
   });
 
   it('"Feuer" finds the Fire tera type in an unfiltered search too', async () => {
     const hits = await search({ q: 'Feuer' });
-    expect(hits).toContainEqual({ type: 'tera', name: 'Fire', shortDesc: '' });
+    expect(hits).toContainEqual(expect.objectContaining({ type: 'tera', name: 'Fire', shortDesc: '' }));
   });
 
   it('"Glurak" finds Charizard', async () => {
     const hits = await search({ q: 'Glurak' });
     expect(hits[0]).toMatchObject({ type: 'pokemon', name: 'Charizard' });
+  });
+
+  it('?lang=de returns the German label (Charizard → Glurak)', async () => {
+    const hits = await search({ q: 'Charizard', lang: 'de' });
+    expect(hits[0]).toMatchObject({ type: 'pokemon', name: 'Charizard', label: 'Glurak' });
+  });
+
+  it('?lang=en returns the English label', async () => {
+    const hits = await search({ q: 'Glurak', lang: 'en' });
+    expect(hits[0]).toMatchObject({ type: 'pokemon', name: 'Charizard', label: 'Charizard' });
   });
 
   it('German names with umlauts match their transliteration ("Ueberreste" → Leftovers)', async () => {

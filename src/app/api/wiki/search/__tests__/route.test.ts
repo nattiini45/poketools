@@ -198,16 +198,22 @@ describe('GET /api/wiki/search', () => {
 
   // ── Cache headers ──────────────────────────────────────────────────
 
-  it('sets cache headers on response', async () => {
-    const res = await GET(makeRequest(undefined, { q: 'gar' }));
+  it('sets cache headers on response when ?lang= keys the localized body to the URL', async () => {
+    const res = await GET(makeRequest(undefined, { q: 'gar', lang: 'en' }));
 
     expect(res.headers.get('Cache-Control')).toContain('s-maxage=3600');
   });
 
   it('sets cache headers even for empty results', async () => {
-    const res = await GET(makeRequest(undefined, {}));
+    const res = await GET(makeRequest(undefined, { lang: 'en' }));
 
     expect(res.headers.get('Cache-Control')).toContain('s-maxage=3600');
+  });
+
+  it('answers no-store without ?lang= so a cookie-localized body never fills the shared cache', async () => {
+    const res = await GET(makeRequest(undefined, { q: 'gar' }));
+
+    expect(res.headers.get('Cache-Control')).toContain('no-store');
   });
 
   // ── shortDesc field ────────────────────────────────────────────────

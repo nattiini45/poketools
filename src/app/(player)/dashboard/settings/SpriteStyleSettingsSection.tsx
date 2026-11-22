@@ -1,6 +1,8 @@
 import { getSessionPlayer } from '@/lib/auth/helpers';
 import { getPlayerSpriteStyle } from '@/lib/supabase/queries/player-sprite-style';
-import type { SpriteStylePreference } from '@/lib/pkmn/sprite-styles';
+import { getDataLocale } from '@/i18n/server';
+import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+import { SPRITE_PREVIEW_SPECIES, type SpriteStylePreference } from '@/lib/pkmn/sprite-styles';
 import SpriteStyleSettingsForm from './SpriteStyleSettingsForm';
 
 /**
@@ -23,5 +25,9 @@ export default async function SpriteStyleSettingsSection() {
       console.error('[settings] sprite_style read failed:', err);
     }
   }
-  return <SpriteStyleSettingsForm stored={stored} readFailed={readFailed} />;
+  // Resolved here, server-side: the preview cards' alt text needs the species
+  // dictionary, which only the settings page may ship — the nav's shared chunk
+  // must stay map-free (issue #140).
+  const previewSpecies = localizeSpecies(SPRITE_PREVIEW_SPECIES, await getDataLocale());
+  return <SpriteStyleSettingsForm stored={stored} readFailed={readFailed} previewSpecies={previewSpecies} />;
 }

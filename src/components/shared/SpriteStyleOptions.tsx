@@ -2,8 +2,6 @@
 
 import { useId } from 'react';
 import { useMessages, useT } from '@/i18n/client';
-import { useDataLocale } from '@/i18n/client';
-import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { spriteStyleMessages } from '@/i18n/messages/sprite-style';
 import {
   SITE_DEFAULT_SPRITE_STYLE,
@@ -13,7 +11,7 @@ import {
   spriteResolver,
   type SpriteStylePreference,
 } from '@/lib/pkmn/sprite-styles';
-import PokemonSprite from './PokemonSprite';
+import SpriteImg from './SpriteImg';
 
 /**
  * The sprite-style radio group (docs/pkmn.md, "Sprite styles").
@@ -22,6 +20,11 @@ import PokemonSprite from './PokemonSprite';
  *   preview species in that style, the label and a one-line help text.
  * - `compact` (NavBar menu, mobile drawer): plain rows beside the language
  *   options, no previews.
+ *
+ * The preview species' localized name comes in as `previewSpecies`, resolved
+ * by the server component that has the dictionary anyway — this component
+ * stays off `names/species`, so the nav's chunk never ships `species.de.json`
+ * for one settings-page alt text (issue #140).
  *
  * Native radios inside labels: arrow keys move the choice, the label is the
  * whole row (at least 44 px tall), screen readers get the legend and the help
@@ -35,6 +38,7 @@ export default function SpriteStyleOptions({
   variant,
   legendClassName,
   disabled = false,
+  previewSpecies,
 }: {
   /** Radio group name; unique per mounted instance. */
   name: string;
@@ -43,13 +47,14 @@ export default function SpriteStyleOptions({
   variant: 'cards' | 'compact';
   legendClassName?: string;
   disabled?: boolean;
+  /** Localized preview-species name for the cards' aria labels; canonical English when absent. */
+  previewSpecies?: string;
 }) {
   const t = useT(spriteStyleMessages);
   const copy = useMessages(spriteStyleMessages);
-  const dataLocale = useDataLocale();
   const baseId = useId();
   const broadcastAvailable = spriteResolver.hasBroadcast(SPRITE_PREVIEW_SPECIES);
-  const species = localizeSpecies(SPRITE_PREVIEW_SPECIES, dataLocale);
+  const species = previewSpecies ?? SPRITE_PREVIEW_SPECIES;
 
   const helpFor = (option: SpriteStylePreference): string => {
     if (option === 'site') {
@@ -105,10 +110,13 @@ export default function SpriteStyleOptions({
                 role="img"
                 aria-label={t('previewAlt', { style: label, species })}
               >
-                <PokemonSprite
+                <SpriteImg
                   name={SPRITE_PREVIEW_SPECIES}
-                  size={56}
+                  width={56}
+                  height={56}
                   spriteStyle={resolveSpriteStyle(option)}
+                  alt=""
+                  loading="lazy"
                   className="h-14 w-14"
                 />
               </span>

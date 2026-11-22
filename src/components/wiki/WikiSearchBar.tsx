@@ -5,42 +5,16 @@ import Link from 'next/link';
 import { Loader2, Search } from 'lucide-react';
 import { useDataLocale, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
-import { localizeName } from '@/lib/pkmn/i18n/names';
-import type { PkmnKind } from '@/lib/pkmn/i18n/types';
-import type { WikiSearchResult, WikiEntityType } from '@/types/wiki';
-
-/** The pkmn-layer kind of each result type, for the display name (the API returns English names). */
-export const RESULT_KIND: Record<WikiEntityType, PkmnKind> = {
-  pokemon: 'species',
-  move: 'move',
-  item: 'item',
-  ability: 'ability',
-  tera: 'type',
-};
-
-export function getWikiPath(result: WikiSearchResult): string {
-  const encodedName = encodeURIComponent(result.name);
-  switch (result.type) {
-    case 'pokemon':
-      return `/pokemon/${encodedName}`;
-    case 'move':
-      return `/wiki/moves/${encodedName}`;
-    case 'item':
-      return `/wiki/items/${encodedName}`;
-    case 'ability':
-      return `/wiki/abilities/${encodedName}`;
-    case 'tera':
-      return `/wiki/tera/${encodedName}`;
-  }
-}
+import { getWikiPath, resultLabel } from '@/lib/wiki/search-result';
+import type { WikiSearchResult } from '@/types/wiki';
 
 /**
  * The wiki search box. `/api/wiki/search` matches English and German names (with umlaut transliteration)
- * whatever the language, and returns English names; they are localized here, at display.
+ * whatever the language; each result's `label` arrives already localized to the viewer's data locale.
  */
 export default function WikiSearchBar() {
   const t = useT(wikiMessages);
-  const dl = useDataLocale();
+  const dataLocale = useDataLocale();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<WikiSearchResult[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -60,7 +34,8 @@ export default function WikiSearchBar() {
     setLoading(true);
     debounceRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/wiki/search?q=${encodeURIComponent(query)}`);
+        // `lang=` keeps the response's CDN cache key per-locale and refetches labels on a language switch.
+        const res = await fetch(`/api/wiki/search?q=${encodeURIComponent(query)}&lang=${dataLocale}`);
         const json = await res.json() as { success: boolean; data?: WikiSearchResult[] };
         if (json.success && json.data) {
           setResults(json.data);
@@ -76,7 +51,7 @@ export default function WikiSearchBar() {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [query, dataLocale]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -123,7 +98,7 @@ export default function WikiSearchBar() {
                 className="flex min-h-11 items-center justify-between gap-3 px-4 py-2 transition-colors duration-80 hover:bg-hover focus-visible:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-ink"
               >
                 <span className="min-w-0 truncate text-body text-fg">
-                  {localizeName(RESULT_KIND[result.type], result.name, dl)}
+                  {resultLabel(result)}
                 </span>
                 <span className="shrink-0 text-caption text-fg-muted">{t(`search.kind.${result.type}`)}</span>
               </Link>
