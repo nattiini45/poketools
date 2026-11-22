@@ -1084,6 +1084,53 @@ describe('signIn callback link intent', () => {
     expect(mockedLink).toHaveBeenCalledWith('P', 'D2');
   });
 
+  // A superadmin is a site admin whatever the stored is_admin says (#133): the link
+  // standing check reads the live superadmin decision, like the guards, not the flag.
+  it.each(['banned', 'suspended'] as const)(
+    'lets the Discord superadmin link even when %s with is_admin=false',
+    async (status) => {
+      process.env.SUPERADMIN_DISCORD_ID = 'auth-uuid-1';
+      mockAuth.mockResolvedValue(liveSession({ provider: 'discord' }));
+      mockedRead.mockResolvedValue(makeRow({ id: 'P', status, is_admin: false }));
+
+      await expect(runSignIn()).resolves.toBe(true);
+      expect(mockedLink).toHaveBeenCalledWith('P', 'D2');
+    }
+  );
+
+  it.each(['banned', 'suspended'] as const)(
+    'still refuses a non-superadmin Discord identity that is %s with is_admin=false',
+    async (status) => {
+      process.env.SUPERADMIN_DISCORD_ID = 'someone-else';
+      mockAuth.mockResolvedValue(liveSession({ provider: 'discord' }));
+      mockedRead.mockResolvedValue(makeRow({ id: 'P', status, is_admin: false }));
+
+      await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+      expect(mockedLink).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([true, false] as const)(
+    'the credentials superadmin passes the link standing check only while the Discord link holds (linked=%s)',
+    async (linked) => {
+      process.env.SUPERADMIN_EMAIL = 'ops@example.test';
+      process.env.SUPERADMIN_DISCORD_ID = 'discord-op';
+      mockedIsLinked.mockResolvedValue(linked);
+      mockAuth.mockResolvedValue(liveSession({ user: { id: 'auth-uuid-1', email: 'ops@example.test' } }));
+      mockedRead.mockResolvedValue(makeRow({ id: 'P', status: 'suspended', is_admin: false }));
+
+      await inRender(async () => {
+        if (linked) {
+          await expect(runSignIn()).resolves.toBe(true);
+          expect(mockedLink).toHaveBeenCalledWith('P', 'D2');
+        } else {
+          await expect(runSignIn()).resolves.toBe('/auth/error?error=LinkExpired');
+          expect(mockedLink).not.toHaveBeenCalled();
+        }
+      });
+    }
+  );
+
   it('fails closed when the live read throws', async () => {
     mockAuth.mockResolvedValue(liveSession());
     mockedRead.mockRejectedValue(new Error('db down'));

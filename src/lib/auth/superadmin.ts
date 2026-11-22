@@ -13,6 +13,7 @@
  *
  * This module imports neither `@/auth` nor the auth helpers, so both can use it.
  */
+import { cache } from 'react';
 import { getPlayerIdByDiscordId, isAuthUserLinkedToDiscordId } from '@/lib/supabase/queries/players';
 
 /** The configured `SUPERADMIN_EMAIL`, trimmed and lower-cased; null when unset or blank. */
@@ -62,4 +63,31 @@ export async function resolveSuperadminPlayerId(): Promise<string | null> {
   const discordId = superadminDiscordId();
   if (!discordId) return null;
   return getPlayerIdByDiscordId(discordId);
+}
+
+/** The credentials link read, memoised per server render: the token's `superadminLinked` can be 5 minutes old. */
+const readCredentialsSuperadminLink = cache(
+  (authUserId: string, email: string): Promise<boolean> => resolveCredentialsSuperadminLink(authUserId, email)
+);
+
+/**
+ * The live superadmin decision for one session, shared by the auth callbacks
+ * (`currentSessionPlayerId` in `@/auth`) and the guards (`isLiveSuperadmin` in
+ * `helpers.ts`) so the two never drift: `SUPERADMIN_DISCORD_ID` for a Discord
+ * session, the reserved email's live Discord link for a credentials one.
+ * Structural parameter so this module keeps importing neither `@/auth` nor
+ * `next-auth`. Query errors rethrow — callers fail closed.
+ */
+export async function isLiveSuperadminIdentity(session: {
+  provider?: string | null;
+  user?: { id?: string | null; email?: string | null } | null;
+}): Promise<boolean> {
+  if (session.provider !== 'credentials') {
+    const snowflake = superadminDiscordId();
+    return !!snowflake && session.user?.id === snowflake;
+  }
+  const authUserId = session.user?.id;
+  const email = session.user?.email;
+  if (!authUserId || !email || !isReservedSuperadminEmail(email)) return false;
+  return readCredentialsSuperadminLink(authUserId, email);
 }
