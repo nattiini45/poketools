@@ -375,23 +375,23 @@ describe('public docs (owner rulings)', () => {
   });
 
   it('the anchor of a relative .md link names a heading of the target file (issue #146)', () => {
-    // GitHub's heading slugger: lowercase, drop punctuation except - and _ (keeps accented letters
-    // like é), whitespace -> -. A file that exists makes a dead fragment invisible to the check
-    // above, so it is verified here.
+    // GitHub's heading slugger (verified against the rendered anchors): lowercase, drop
+    // punctuation except - and _ (keeps accented letters like é and combining marks), THEN map
+    // each whitespace character to its own hyphen - no collapsing, so `A & B` -> `a--b` while
+    // `control (`x`) and` -> `control-x-and` (the parens leave single spaces).
     const slug = (heading) =>
       heading
         .trim()
         .toLowerCase()
-        .replace(/`/g, '')
-        .replace(/[^\p{L}\p{N} _-]/gu, '')
-        .replace(/\s+/g, '-');
+        .replace(/[^\p{L}\p{N}\p{M}_ -]/gu, '')
+        .replace(/\s/g, '-');
     const anchorsOf = new Map();
     const headings = (rel) => {
       if (!anchorsOf.has(rel)) {
         anchorsOf.set(
           rel,
           new Set(
-            (read(rel).match(/^#{1,6}\s+.+$/gm) ?? [])
+            (read(rel).replace(/```[\s\S]*?```/g, '').match(/^#{1,6}\s+.+$/gm) ?? [])
               .map((h) => slug(h.replace(/^#{1,6}\s+/, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1'))),
           ),
         );
