@@ -28,6 +28,7 @@ const ids = {
   p2: randomUUID(),
   tournament: randomUUID(),
   round: randomUUID(),
+  round2: randomUUID(),
   match: randomUUID(),
   other: randomUUID(),
 };
@@ -67,13 +68,18 @@ describe.skipIf(!optIn)('match_outcome_record (local stack)', () => {
     );
     await run(
       'rounds',
-      client.from('rounds').insert({ id: ids.round, tournament_id: ids.tournament, name: 'Round 1', round_number: 1, best_of: 1 }),
+      client.from('rounds').insert([
+        { id: ids.round, tournament_id: ids.tournament, name: 'Round 1', round_number: 1, best_of: 1 },
+        { id: ids.round2, tournament_id: ids.tournament, name: 'Round 2', round_number: 2, best_of: 1 },
+      ]),
     );
+    // One pairing meets once per round (matches_round_pair_unique): the two seeded matches sit in two rounds.
     await run(
       'matches',
-      client.from('matches').insert([ids.match, ids.other].map((id) => ({
-        id, round_id: ids.round, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2, status: 'in_progress' as const,
-      }))),
+      client.from('matches').insert([
+        { id: ids.match, round_id: ids.round, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2, status: 'in_progress' as const },
+        { id: ids.other, round_id: ids.round2, tournament_id: ids.tournament, player_1_id: ids.p1, player_2_id: ids.p2, status: 'in_progress' as const },
+      ]),
     );
   }, 60000);
 
@@ -85,7 +91,7 @@ describe.skipIf(!optIn)('match_outcome_record (local stack)', () => {
       if (error) failures.push(`${label}: ${JSON.stringify(error)}`);
     };
     await del('matches', client.from('matches').delete().eq('tournament_id', ids.tournament));
-    await del('rounds', client.from('rounds').delete().eq('id', ids.round));
+    await del('rounds', client.from('rounds').delete().eq('tournament_id', ids.tournament));
     await del('tournaments', client.from('tournaments').delete().eq('id', ids.tournament));
     await del('rulesets', deleteLocalRuleset(client, ids.ruleset));
     await del('players', client.from('players').delete().in('id', [ids.p1, ids.p2]));

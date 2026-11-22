@@ -271,7 +271,10 @@ describe.skipIf(!optedIn)('rating/streak streams on the disposable phase-mode st
       const owner = await phaseFixture();
       const id = kind === 'phase' ? owner.match : randomUUID();
       if (kind === 'tournament') {
-        expect((await client.from('matches').insert({ id, tournament_id: tournament, round_id: round, player_1_id: players[0], player_2_id: players[1], winner_id: players[0], status: 'completed', date_played: '2026-02-01T00:00:00Z', confirmed_at: '2026-02-01T00:00:00Z' })).error).toBeNull();
+        // One pairing meets once per round (matches_round_pair_unique): the fixture's standalone match sits in `round`.
+        const round2 = randomUUID();
+        expect((await client.from('rounds').insert({ id: round2, tournament_id: tournament, name: 'Round 2', round_number: 2, best_of: 3 })).error).toBeNull();
+        expect((await client.from('matches').insert({ id, tournament_id: tournament, round_id: round2, player_1_id: players[0], player_2_id: players[1], winner_id: players[0], status: 'completed', date_played: '2026-02-01T00:00:00Z', confirmed_at: '2026-02-01T00:00:00Z' })).error).toBeNull();
       }
       const native = streams.createMixedRatingStorage('phase');
       const curve = await ratings.loadAndComputeRatingCurve(players[0], { storage: native });

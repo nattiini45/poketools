@@ -8,8 +8,8 @@ import type { Database } from '@/types/database';
 const optedIn = localStackOptIn('LOCAL_PHASE_SCOUTING');
 
 describe.skipIf(!optedIn)('native scouting claims on the disposable database', () => {
-  const [rulesetId, seasonId, phaseId, otherPhaseId, roundId, deniedMatch, raceMatch, firstMatch, playerId, opponentId, outsiderId] =
-    Array.from({ length: 11 }, () => randomUUID());
+  const [rulesetId, seasonId, phaseId, otherPhaseId, roundId, round2Id, round3Id, deniedMatch, raceMatch, firstMatch, playerId, opponentId, outsiderId] =
+    Array.from({ length: 13 }, () => randomUUID());
   let admin: SupabaseClient<Database>;
 
   beforeAll(async () => {
@@ -30,11 +30,12 @@ describe.skipIf(!optedIn)('native scouting claims on the disposable database', (
     expect((await admin.from('phase_participants').insert([playerId, opponentId].map(id => ({
       phase_id: phaseId, player_id: id,
     })))).error).toBeNull();
-    expect((await admin.from('phase_rounds').insert({
-      id: roundId, phase_id: phaseId, name: 'Round 1', round_number: 1, best_of: 3,
-    })).error).toBeNull();
-    expect((await admin.from('phase_matches').insert([deniedMatch, raceMatch, firstMatch].map(id => ({
-      id, phase_id: phaseId, round_id: roundId, player_1_id: playerId, player_2_id: opponentId, status: 'scheduled' as const,
+    // One pairing meets once per round (phase_matches_round_pair_unique): the three matches sit in three rounds.
+    expect((await admin.from('phase_rounds').insert([roundId, round2Id, round3Id].map((id, index) => ({
+      id, phase_id: phaseId, name: `Round ${index + 1}`, round_number: index + 1, best_of: 3,
+    })))).error).toBeNull();
+    expect((await admin.from('phase_matches').insert([deniedMatch, raceMatch, firstMatch].map((id, index) => ({
+      id, phase_id: phaseId, round_id: [roundId, round2Id, round3Id][index], player_1_id: playerId, player_2_id: opponentId, status: 'scheduled' as const,
     })))).error).toBeNull();
   }, 60_000);
 
