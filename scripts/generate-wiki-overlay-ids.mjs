@@ -43,6 +43,10 @@ export function collectWikiOverlayIds() {
     }
     for (const key of Object.keys(Dex.forGen(g).data.Aliases)) aliasKeys.add(key);
   }
+  // The Generations tables skip Gigantamax formes (#141); seed their ids from the raw dex so they are tried.
+  for (const sp of Dex.forGen(8).species.all()) {
+    if (sp.isNonstandard === 'Gigantamax') candidates.species.add(sp.id);
+  }
   // @pkmn reads "Mega-<name>", "Primal-<name>" and "Gigantamax-<name>" as the form's id. The gate has no prefix rule of
   // its own: a prefixed spelling is a valid species name only when it lands in this list, so every one is tried here
   // (the base forms of the Mega, Primal and Gigantamax ids included) and kept only when the NatDex walk resolves it.
@@ -57,21 +61,38 @@ export function collectWikiOverlayIds() {
 
   /** @type {Record<'moves' | 'items' | 'abilities' | 'species', string[]>} */
   const ids = { moves: [], items: [], abilities: [], species: [] };
+  const battleOnlySpecies = new Set();
   for (const kind of Object.keys(candidates)) {
     const resolved = new Set();
     const tried = kind === 'species' ? [...candidates[kind], ...aliasKeys, ...prefixed] : [...candidates[kind], ...aliasKeys];
     for (const id of tried) {
       for (let g = MIN_GEN; g <= MAX_GEN; g++) {
-        const entity = lookup(gens.get(g)[kind], id);
-        if (entity && entity.exists && !(kind === 'species' && (entity.battleOnly || entity.isNonstandard))) {
-          resolved.add(toID(id));
-          break;
+        // The Generations data tables exclude Gigantamax formes entirely; the raw dex table keeps them.
+        let entity = lookup(gens.get(g)[kind], id);
+        if (!entity && kind === 'species') {
+          const raw = lookup(Dex.forGen(g).species, id);
+          if (raw && raw.exists && raw.isNonstandard === 'Gigantamax') {
+            battleOnlySpecies.add(toID(id));
+            break;
+          }
         }
+        if (!entity || !entity.exists) continue;
+        if (kind === 'species') {
+          // #141: /pokemon/<forme> pages resolve battle-only formes (Mega/Primal via `battleOnly`,
+          // Gigantamax via `isNonstandard: 'Gigantamax'`); the gate admits their ids.
+          if (entity.isNonstandard === 'Gigantamax' || (entity.battleOnly && !entity.isNonstandard)) {
+            battleOnlySpecies.add(toID(id));
+            break;
+          }
+          if (entity.battleOnly || entity.isNonstandard) break;
+        }
+        resolved.add(toID(id));
+        break;
       }
     }
     ids[kind] = [...resolved].sort();
   }
-  return ids;
+  return { ...ids, battleOnlySpecies: [...battleOnlySpecies].sort() };
 }
 
 /**
@@ -100,6 +121,7 @@ function render(ids, hiddenPowerTypes) {
   for (const [kind, name] of Object.entries(KINDS)) {
     parts.push(`export const ${name} = ${JSON.stringify(ids[kind].join('|'))};`, '');
   }
+  parts.push(`export const BATTLE_ONLY_SPECIES_IDS = ${JSON.stringify(ids.battleOnlySpecies.join('|'))};`, '');
   parts.push(`export const HIDDEN_POWER_TYPES = ${JSON.stringify(hiddenPowerTypes.join('|'))};`, '');
   return parts.join('\n').trimEnd() + '\n';
 }

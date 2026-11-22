@@ -122,6 +122,7 @@ export default defineDe<typeof en>()({
     weakTo: 'Schwach gegen',
     resists: 'Resistent gegen',
     immuneTo: 'Immun gegen',
+    battleOnlyForme: 'Nur-Kampf-Form von {base}',
   },
   usage: {
     battleStats: 'Kampfstatistik',

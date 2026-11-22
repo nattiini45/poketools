@@ -1,4 +1,4 @@
-import { ABILITY_IDS, HIDDEN_POWER_TYPES, ITEM_IDS, MOVE_IDS, SPECIES_IDS } from './wiki-overlay-ids.generated';
+import { ABILITY_IDS, BATTLE_ONLY_SPECIES_IDS, HIDDEN_POWER_TYPES, ITEM_IDS, MOVE_IDS, SPECIES_IDS } from './wiki-overlay-ids.generated';
 
 /**
  * English type names the tera overlay accepts (the URL segment and the TypeBadge key). The proxy checks them before the
@@ -17,6 +17,8 @@ const KNOWN_IDS = {
 };
 
 const KNOWN_SPECIES_IDS = new Set(SPECIES_IDS.split('|'));
+// Battle-only formes (Mega/Primal/Gigantamax) have their own /pokemon/<name> pages (#141).
+const KNOWN_BATTLE_ONLY_SPECIES_IDS = new Set(BATTLE_ONLY_SPECIES_IDS.split('|'));
 
 const HIDDEN_POWER_TYPE_IDS = new Set(HIDDEN_POWER_TYPES.split('|'));
 
@@ -95,5 +97,5 @@ export function isUnknownWikiDetailName(pathname: string): boolean {
   }
   const id = toSpeciesId(name);
   if (id === '') return true;
-  return !KNOWN_SPECIES_IDS.has(id);
+  return !KNOWN_SPECIES_IDS.has(id) && !KNOWN_BATTLE_ONLY_SPECIES_IDS.has(id);
 }

@@ -122,6 +122,7 @@ export default {
     weakTo: 'Weak to',
     resists: 'Resists',
     immuneTo: 'Immune to',
+    battleOnlyForme: 'Battle-only forme of {base}',
   },
   usage: {
     battleStats: 'Battle Stats',

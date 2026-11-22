@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { speciesMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
 import { getStatBarColor, getStatBarWidth } from '@/lib/pkmn/stat-calc';
@@ -11,7 +12,7 @@ import { publicReads } from '@/lib/cache/public-reads';
 import { phasePublicReads } from '@/lib/cache/phase-public-reads';
 import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getApprovedEntityNotes } from '@/lib/supabase/queries/wiki-entity-notes';
-import { getWikiSpeciesDetail } from '@/lib/wiki/index-rows.server';
+import { getWikiSpeciesDetail, getWikiSpeciesFormeDetail } from '@/lib/wiki/index-rows.server';
 import { getDataLocale, getT } from '@/i18n/server';
 import type { Translator } from '@/i18n/core';
 import { wikiMessages } from '@/i18n/messages/wiki';
@@ -48,11 +49,13 @@ export default async function PokemonDetailPage({ params }: PageProps) {
   const { name } = await params;
   const decodedName = decodeURIComponent(name);
   // Locale-neutral species data from the bounded module memo (English names, numbers).
-  const species = getWikiSpeciesDetail(decodedName);
+  const species = getWikiSpeciesDetail(decodedName) ?? getWikiSpeciesFormeDetail(decodedName);
 
   if (!species) notFound();
 
   const { typeInfo, abilities } = species;
+  // Battle-only formes (Mega/Primal/Gigantamax, #141): notes live on the base species' page.
+  const baseName = (species as { baseName?: string }).baseName;
 
   const speciesInfo: PokemonSpeciesInfo = {
     name: species.name,
@@ -71,7 +74,7 @@ export default async function PokemonDetailPage({ params }: PageProps) {
       ? phasePublicReads.allTimeGameTotal()
       : publicReads.totalGames('all_time', null)),
     session
-      ? phaseMode.then(mode => getApprovedEntityNotes('pokemon', species.name, mode)).then(({ notes }) => notes)
+      ? phaseMode.then(mode => getApprovedEntityNotes('pokemon', baseName ?? species.name, mode)).then(({ notes }) => notes)
       : Promise.resolve([]),
     readHistoricalUsage({ scopeType: 'all_time', scopeId: null }),
     historicalCompetitionOptions(),
@@ -105,6 +108,14 @@ export default async function PokemonDetailPage({ params }: PageProps) {
                 <p className="text-caption text-fg-muted">
                   {abilities.map((ability) => localizeAbility(ability, dataLocale)).join(' / ')}
                 </p>
+              )}
+              {baseName && (
+                <Link
+                  href={`/pokemon/${encodeURIComponent(baseName)}`}
+                  className="text-caption text-fg-muted underline underline-offset-2 hover:text-fg"
+                >
+                  {t('pokemon.battleOnlyForme', { base: localizeSpecies(baseName, dataLocale) })}
+                </Link>
               )}
             </div>
           </div>
@@ -170,7 +181,7 @@ export default async function PokemonDetailPage({ params }: PageProps) {
 
       <WikiNotesSection
         entityType="pokemon"
-        entityName={species.name}
+        entityName={baseName ?? species.name}
         notes={notes}
         unauthenticated={!session}
       />

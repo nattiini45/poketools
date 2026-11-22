@@ -91,6 +91,44 @@ export function getSpeciesNatDex(
   return { entity: mostRecent, earliestGen, resolvedGen };
 }
 
+export interface BattleOnlySpeciesResult extends NatDexResolveResult<SpeciesEntity> {
+  /** The base species this battle forme belongs to (`species.battleOnly` names it; Mega/Primal/Gmax use `baseSpecies`). */
+  baseName: string;
+}
+
+/**
+ * The battle-only counterpart of `getSpeciesNatDex` (issue #141): resolves Mega Evolutions, Primal
+ * formes and Gigantamax formes — the class the regular resolver deliberately hides from every
+ * other caller. `isNonstandard` stays excluded. Returns the forme plus its base species name.
+ */
+export function getBattleOnlySpeciesNatDex(
+  name: string,
+): BattleOnlySpeciesResult | null {
+  let earliestGen: number | null = null;
+  let mostRecent: SpeciesEntity | null = null;
+  let resolvedGen = 0;
+  for (let g = NATDEX_MIN_GEN; g <= NATDEX_MAX_GEN; g++) {
+    let s = getGeneration(g).species.get(name);
+    if (!s) {
+      // The Generations tables exclude Gigantamax formes entirely; the raw dex table keeps them.
+      const raw = Dex.forGen(g).species.get(name);
+      if (raw && raw.exists && raw.isNonstandard === 'Gigantamax') s = raw as unknown as SpeciesEntity;
+    }
+    if (!s || !s.exists) continue;
+    const battleOnly = s.battleOnly || s.isNonstandard === 'Gigantamax';
+    if (!battleOnly || (s.isNonstandard && s.isNonstandard !== 'Gigantamax')) continue;
+    if (earliestGen === null) earliestGen = g;
+    mostRecent = s;
+    resolvedGen = g;
+  }
+  if (!mostRecent || earliestGen === null) return null;
+  const battleOnly = mostRecent.battleOnly;
+  const baseName =
+    (Array.isArray(battleOnly) ? battleOnly[0] : typeof battleOnly === 'string' ? battleOnly : null) ??
+    mostRecent.baseSpecies;
+  return { entity: mostRecent, earliestGen, resolvedGen, baseName };
+}
+
 export function getMoveNatDex(
   name: string,
 ): NatDexResolveResult<MoveEntity> | null {
