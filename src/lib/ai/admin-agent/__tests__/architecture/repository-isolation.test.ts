@@ -9,20 +9,21 @@
  *    the harness's fixture; never from a request body, a route param or a conversation id;
  *  - the store's own surface stays free of a method that is not scoped by an admin (no "get any conversation" escape).
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { sourceText } from '@/test/file-walk';
 import { isTestPath, REPO_ROOT, relFromRepo, stripComments, walkFiles } from './graph';
 
 // The scans read about 1,500 files; under a full parallel run the default 5 s is not enough.
 vi.setConfig({ testTimeout: 30_000 });
 
-/** The comment-free text of a file, read once per run: the scans below visit about 1,500 files several times each. */
+/** The comment-free text of a file; `sourceText` shares each raw read across the scanning tests (issue #144). */
 const strippedCache = new Map<string, string>();
 function strippedSource(file: string): string {
   let text = strippedCache.get(file);
   if (text === undefined) {
-    text = stripComments(readFileSync(file, 'utf8'));
+    text = stripComments(sourceText(file));
     strippedCache.set(file, text);
   }
   return text;
@@ -56,13 +57,13 @@ describe('the assistant\'s tables are named by the store alone', () => {
   it('has no raw SQL against them outside the migration: no template literal or string passes an admin_agent_ statement on', () => {
     const offenders = code
       .filter((file) => !MAY_NAME_TABLES(relFromRepo(file)))
-      .filter((file) => /\b(?:insert\s+into|update|delete\s+from|truncate)\s+(?:public\.)?admin_agent_/i.test(readFileSync(file, 'utf8')))
+      .filter((file) => /\b(?:insert\s+into|update|delete\s+from|truncate)\s+(?:public\.)?admin_agent_/i.test(sourceText(file)))
       .map(relFromRepo);
     expect(offenders).toEqual([]);
   });
 
   it('keeps the table names in exactly one migration', () => {
-    const migrations = walkFiles(path.join(REPO_ROOT, 'supabase/migrations'), (rel) => rel.endsWith('.sql')).filter((file) => /create\s+table[^;]*admin_agent_/i.test(readFileSync(file, 'utf8')));
+    const migrations = walkFiles(path.join(REPO_ROOT, 'supabase/migrations'), (rel) => rel.endsWith('.sql')).filter((file) => /create\s+table[^;]*admin_agent_/i.test(sourceText(file)));
     expect(migrations.map(relFromRepo)).toEqual(['supabase/migrations/20261027100000_admin_agent_tables.sql']);
   });
 });
@@ -80,7 +81,7 @@ describe('an AdminId is minted from a live player and nowhere else', () => {
   it('mints, in the routes, only from the player a live guard returned', () => {
     const helper = path.join(REPO_ROOT, 'src/app/api/admin/agent/_lib/auth.ts');
     expect(existsSync(helper)).toBe(true);
-    const text = stripComments(readFileSync(helper, 'utf8'));
+    const text = stripComments(sourceText(helper));
     const calls = [...text.matchAll(/adminIdOf\(([^)]*)\)/g)].map((match) => match[1].trim());
     expect(calls).toEqual(['player.playerId']);
     // The player comes from a `require*` guard in the same function, before the id is made.
@@ -99,7 +100,7 @@ describe('an AdminId is minted from a live player and nowhere else', () => {
 });
 
 describe('the store\'s surface', () => {
-  const read = (name: string) => stripComments(readFileSync(path.join(REPO_ROOT, AGENT, 'store', name), 'utf8'));
+  const read = (name: string) => stripComments(sourceText(path.join(REPO_ROOT, AGENT, 'store', name)));
   const repositories = ['conversations', 'messages', 'plans', 'proposals', 'actions', 'refs', 'snapshots', 'usage'];
 
   it('has repository methods that all start with the admin: no method takes only a row id', () => {
@@ -121,7 +122,7 @@ describe('the store\'s surface', () => {
   });
 
   it('keeps the SQL functions out of reach of any other module: the rpc names appear only under store/', () => {
-    const rpcNames = [...stripComments(readFileSync(path.join(REPO_ROOT, 'supabase/migrations/20261027100000_admin_agent_tables.sql'), 'utf8')).matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?(admin_agent_\w+)/gi)].map((m) => m[1]);
+    const rpcNames = [...stripComments(sourceText(path.join(REPO_ROOT, 'supabase/migrations/20261027100000_admin_agent_tables.sql'))).matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?(admin_agent_\w+)/gi)].map((m) => m[1]);
     expect(rpcNames.length).toBeGreaterThan(3);
     const offenders = code.filter((file) => !MAY_NAME_TABLES(relFromRepo(file))).filter((file) => rpcNames.some((name) => strippedSource(file).includes(name))).map(relFromRepo);
     expect(offenders).toEqual([]);
