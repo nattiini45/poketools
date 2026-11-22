@@ -76,7 +76,7 @@ This is the central documentation index for all major PokéTools modules.
 - **PKMN** — Pokémon data access, legality, parsing, speed/stat helpers. See [PKMN](./pkmn.md).
 - **PKMN i18n** — `src/lib/pkmn/i18n`: official German (and English) names of species, moves, items, abilities, types, natures and stats from vendored PokeAPI data, `toID`, bilingual search keys, German game descriptions and `<PkmnName>`; display only, stored values stay English. See [PKMN](./pkmn.md).
 - **Avatar** — Avatar rendering, generation, gallery support. See [Avatar](./avatar.md).
-- **Design** — Shared design tokens (`poke-*` Tailwind tokens), `src/components/ui/*` primitives and site palettes (`src/lib/design/site-palettes.ts`, picker in NavBar). See [Design](./design.md).
+- **Design** — Shared design tokens (`poke-*` Tailwind tokens), `src/components/ui/*` primitives and site palettes (`src/lib/design/site-palettes.ts`, picker in NavBar). See [Design](./design.md). The vendored Fluid Functionalism support code (`src/lib/fluid/`): [Fluid](./fluid.md).
 - **Smogon** — Stats/set import pipelines. See [Smogon](./smogon.md).
 - **Team** — Team visibility/redaction logic. See [Team](./team.md).
 - **Teambuilder Editor (v3)** — Unified team editor (teambuilder/plan/library modes), state machine, FAB, AI panel (Assistant and Coach tabs). See [Teambuilder Editor](./teambuilder-editor.md).
