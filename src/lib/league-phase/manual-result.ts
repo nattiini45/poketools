@@ -4,6 +4,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { assertMayRecordPhaseResult } from '@/lib/auth/phase-access';
 import { MOMENTS_NOT_SAVED_WARNING, type ManualResultMomentsOutcome } from '@/lib/broadcast/moment-limits';
 import { emitPhaseResultEffects } from './result-effects';
+import { logAuditEvent } from '@/lib/audit/log';
 import { createNativePhaseServices } from './services';
 import { logger } from '@/lib/logger';
 import { expireSeasonReads, revalidatePhaseMatchPages } from '@/lib/revalidation';
@@ -97,5 +98,23 @@ export async function recordNativeManualResult(
   }
 
   await emitPhaseResultEffects(owner, mid, result);
+
+  // A player's own report is an audit-worthy event: the admin match History
+  // panel reads `phase_game` rows keyed by `metadata.match_id` (listMatchAuditEvents).
+  logAuditEvent({
+    actor_id: player.playerId,
+    actor_name: player.name,
+    action: 'game.player_report',
+    resource_type: 'phase_game',
+    resource_id: result.game_id,
+    resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+    metadata: {
+      match_id: mid,
+      phase_id: owner.phase_id,
+      season_id: owner.season_id,
+      winner_id: body.winner_id,
+      source: 'manual',
+    },
+  });
   return { ...result, ...momentsOutcome };
 }

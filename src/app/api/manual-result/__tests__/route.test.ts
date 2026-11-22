@@ -50,6 +50,10 @@ vi.mock('@/lib/supabase/queries/broadcast-moments', () => ({
   createMomentsBatch: vi.fn(),
 }));
 
+vi.mock('@/lib/audit/log', () => ({
+  logAuditEvent: vi.fn(),
+}));
+
 vi.mock('@/lib/revalidation', () => ({
   revalidateMatchPages: vi.fn(),
   revalidatePhaseMatchPages: vi.fn(),
@@ -96,6 +100,7 @@ import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { triggerMatchAnalysis } from '@/lib/ai/trigger';
 import { createMomentsBatch } from '@/lib/supabase/queries/broadcast-moments';
 import { logger } from '@/lib/logger';
+import { logAuditEvent } from '@/lib/audit/log';
 import { recordNativeManualResult } from '@/lib/league-phase/manual-result';
 import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 import { findLegacyPhaseAliasOwner, findNativePhaseAliasOwner, standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
@@ -439,6 +444,42 @@ describe('POST /api/manual-result', () => {
         submitter_id: P1_ID,
       })
     );
+  });
+
+  it('audits a player report as a game.player_report row keyed to the match and game', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(match as never);
+    vi.mocked(recordGameResult).mockResolvedValue({
+      game_id: 'g-1',
+      bo_reached: false,
+    } as never);
+
+    const response = await POST(makeRequest(validBody));
+
+    expect(response.status).toBe(200);
+    expect(logAuditEvent).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        actor_id: P1_ID,
+        actor_name: 'Alice',
+        action: 'game.player_report',
+        resource_type: 'game',
+        resource_id: 'g-1',
+        resource_name: 'Alice vs Bob',
+        metadata: {
+          match_id: MATCH_ID,
+          tournament_id: TOURNAMENT_ID,
+          winner_id: P1_ID,
+          source: 'manual',
+        },
+      })
+    );
+  });
+
+  it('writes no audit row when the result was never recorded', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(null as never);
+
+    await POST(makeRequest(validBody));
+
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   it('triggers AI match analysis when BO threshold is reached', async () => {
