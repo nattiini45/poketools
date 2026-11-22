@@ -7,7 +7,19 @@ The Wiki / Encyclopaedia system provides entry pages for every Pokémon move, it
 ```
 src/types/wiki.ts                              # WikiEntityType, WikiNote, WikiMoveEntry, etc.
 src/lib/supabase/queries/wiki-notes.ts         # CRUD/moderation for wiki_notes + reports
-src/lib/wiki/moderation.ts                     # Simple automated note scan
+src/lib/wiki/                                  # Entry builders, index/detail reads, note services + machines, search/sort
+├── entries.ts                               # Shared WikiMoveEntry / Item / Ability builders
+├── index-rows.server.ts                     # Index-table rows + per-entity detail getters (server)
+├── item-category.ts                         # WIKI_ITEM_CATEGORIES + facet keys
+├── localize-entry.server.ts                 # localizeWikiEntry: entry text in the data locale
+├── moderation.ts                            # Simple automated note scan
+├── native-phase-services.ts                 # Wiki note service bindings for native phases
+├── note-moderation-state.ts                 # noteModerationMachine: note approve/reject lifecycle
+├── note-report-state.ts                     # noteReportMachine: report queue lifecycle
+├── phase-public.ts                          # Public note/report DTO mappers
+├── phase-services.ts                        # Phase-side wiki note store (schemas, deps, versioning)
+├── search-result.ts                         # Search-result labels + wiki paths
+└── sort.ts                                  # compareWikiSortValues: locale-aware index-table sort
 src/lib/pkmn/dex.ts                            # Extended: getAllMoves(), getAllItems(), getAllAbilities()
 src/app/api/wiki/
 ├── moves/[name]/route.ts                      # GET: move details + approved notes
@@ -31,7 +43,6 @@ src/components/wiki/
 ├── WikiParts.tsx                              # Shared layout pieces: hero panel, hairline section, stat strip, definition grid, empty state, usage bar
 ├── WikiLinkList.tsx                           # Entry links on one surface with the @fluid hover highlight
 └── WikiSearchBar.tsx                          # Search input with dropdown results
-src/lib/wiki/entries.ts                        # Shared WikiMoveEntry / Item / Ability builders
 src/app/(public)/wiki/
 ├── layout.tsx                                 # WikiHeader above every wiki page, the PokeAPI credit below
 ├── page.tsx                                   # Wiki home: intro + the five section tiles
