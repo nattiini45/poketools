@@ -14,7 +14,7 @@
  *
  * `walkStats` counts the real work so a test can prove the walk ran once.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterAll } from 'vitest';
 
@@ -73,15 +73,28 @@ const freshTexts = new Map<string, string>();
 export function sourceText(file: string): string {
   const fresh = freshTexts.get(file);
   if (fresh !== undefined) return fresh;
-  const { mtimeMs, size } = statSync(file);
+  // One handle for the stat and the read so a concurrent writer cannot swap the file in between.
+  const fd = openSync(file, 'r');
+  let mtimeMs: number, size: number;
+  try {
+    ({ mtimeMs, size } = fstatSync(fd));
+  } catch (error) {
+    closeSync(fd);
+    throw error;
+  }
   const entry = diskCache()[file];
   let text: string;
   if (entry !== undefined && entry.m === mtimeMs && entry.s === size) {
     walkStats.cacheHits += 1;
+    closeSync(fd);
     text = entry.t;
   } else {
     walkStats.textsRead += 1;
-    text = readFileSync(file, 'utf8');
+    try {
+      text = readFileSync(fd, 'utf8');
+    } finally {
+      closeSync(fd);
+    }
     diskCache()[file] = { m: mtimeMs, s: size, t: text };
     dirty = true;
   }
