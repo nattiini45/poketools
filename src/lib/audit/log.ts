@@ -35,6 +35,9 @@ export type AuditAction =
   | 'game.edit'
   | 'game.delete'
   | 'game.import_replay'
+  // A result a player reported through the manual-result form (or its phase
+  // equivalent); admin equivalents are `match.admin_result`/`game.edit`.
+  | 'game.player_report'
   | 'match.reset'
   | 'match.schedule'
   | 'match.dispute'

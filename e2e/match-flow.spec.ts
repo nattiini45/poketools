@@ -80,8 +80,9 @@ test.describe.serial('a reported result is confirmed by the opponent', () => {
     await expect(admin.getByText('Seed Player 7 vs Seed Player 8').first()).toBeVisible();
     await expect(admin.getByRole('button', { name: /History/ })).toBeVisible();
 
-    // A player's report is not an audited admin action, so the history starts empty and the reopen is its first entry.
-    await expect(admin.getByText('Nothing has been recorded for this match yet.')).toBeVisible();
+    // A player's report is audited as `game.player_report`, so it is the first history entry; the reopen is the second.
+    await expect(admin.getByText(/Showing 1 of 1/)).toBeVisible();
+    await expect(admin.getByText('Result reported by a player')).toBeVisible();
     await admin.getByRole('button', { name: 'Reopen match' }).click();
     const dialog = admin.getByRole('dialog', { name: 'Reopen this match?' });
     await dialog.getByLabel('Reason for reopening').fill('e2e: checking the match history panel');
@@ -89,7 +90,7 @@ test.describe.serial('a reported result is confirmed by the opponent', () => {
     await expect(admin.getByText('The match was reopened.')).toBeVisible();
 
     await admin.reload();
-    await expect(admin.getByText(/Showing 1 of 1/)).toBeVisible();
+    await expect(admin.getByText(/Showing 2 of 2/)).toBeVisible();
     await expect(admin.getByText('e2e: checking the match history panel')).toBeVisible();
   });
 });

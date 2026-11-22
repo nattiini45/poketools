@@ -20,6 +20,7 @@ vi.mock('@/lib/league-phase/services', () => ({ createNativePhaseServices: h.ser
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn(), revalidatePhaseMatchPages: h.invalidate }));
 vi.mock('@/lib/supabase/queries/phase-broadcast-moments', () => ({ createPhaseMomentsBatch: h.moments }));
 vi.mock('@/lib/league-phase/result-effects', () => ({ emitPhaseResultEffects: h.effects }));
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ logger: { error: h.logError, warn: vi.fn() } }));
 
 const id = '10000000-0000-4000-8000-0000000000aa';

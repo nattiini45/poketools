@@ -70,6 +70,7 @@ export default defineDe<typeof en>()({
     game__edit: 'Partie bearbeitet',
     game__delete: 'Partie gelöscht',
     game__import_replay: 'Replay importiert',
+    game__player_report: 'Ergebnis von einem Spieler gemeldet',
     match__reset: 'Spiel zurückgesetzt',
     match__schedule: 'Spieltermin geändert',
     match__dispute: 'Spiel als strittig markiert',

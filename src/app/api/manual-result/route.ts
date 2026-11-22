@@ -11,6 +11,7 @@ import { getMatchById } from '@/lib/supabase/queries/matches';
 import { submitsAsMatchAdmin } from '@/lib/auth/match-access';
 import { emitMatchResultEffects } from '@/lib/match/result-effects';
 import { createMomentsBatch } from '@/lib/supabase/queries/broadcast-moments';
+import { logAuditEvent } from '@/lib/audit/log';
 import { manualResultSchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { MOMENTS_NOT_SAVED_WARNING, type ManualResultMomentsOutcome } from '@/lib/broadcast/moment-limits';
@@ -144,6 +145,23 @@ export async function POST(request: NextRequest) {
     await emitMatchResultEffects(body.match_id, {
       boReached: result.bo_reached,
       requestCookie: request.headers.get('cookie'),
+    });
+
+    // A player's own report is an audit-worthy event: the admin match History
+    // panel reads `game` rows keyed by `metadata.match_id` (listMatchAuditEvents).
+    logAuditEvent({
+      actor_id: player.playerId,
+      actor_name: player.name,
+      action: 'game.player_report',
+      resource_type: 'game',
+      resource_id: result.game_id,
+      resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+      metadata: {
+        match_id: body.match_id,
+        tournament_id: match.tournament_id,
+        winner_id: body.winner_id,
+        source: 'manual',
+      },
     });
 
     return NextResponse.json<ApiResult<typeof result & ManualResultMomentsOutcome>>({
