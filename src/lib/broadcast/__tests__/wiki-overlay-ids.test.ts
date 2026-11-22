@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { Dex } from '@pkmn/dex';
-import { getAbilityNatDex, getItemNatDex, getMoveNatDex, getSpeciesNatDex } from '@/lib/pkmn/dex';
+import { getAbilityNatDex, getBattleOnlySpeciesNatDex, getItemNatDex, getMoveNatDex, getSpeciesNatDex } from '@/lib/pkmn/dex';
 import { collectHiddenPowerTypes, collectWikiOverlayIds } from '../../../../scripts/generate-wiki-overlay-ids.mjs';
 import { isUnknownWikiDetailName, isUnknownWikiOverlayName, WIKI_OVERLAY_TERA_TYPES } from '../wiki-overlay-lookup';
 
@@ -15,6 +15,7 @@ describe('wiki overlay id list', () => {
     expect(file).toContain(JSON.stringify(ids.items.join('|')));
     expect(file).toContain(JSON.stringify(ids.abilities.join('|')));
     expect(file).toContain(JSON.stringify(ids.species.join('|')));
+    expect(file).toContain(JSON.stringify(ids.battleOnlySpecies.join('|')));
     expect(file).toContain(JSON.stringify(collectHiddenPowerTypes().join('|')));
   });
 
@@ -119,11 +120,13 @@ describe('isUnknownWikiDetailName', () => {
     }
   });
 
-  it('404s the Mega and Primal forms the page itself does not resolve, and lets through the spellings it does', () => {
-    // Mega Charizard X and Primal Groudon are battle-only formes: getSpeciesNatDex answers null, so the page is a 404.
-    for (const name of ['Mega-Charizard-X', 'Primal-Groudon', 'Gigantamax-Charizard']) {
+  it('admits the Mega, Primal and Gigantamax forme pages (#141) but still hides them from the standard resolver', () => {
+    // Battle-only formes get their own pages: getSpeciesNatDex still answers null for them (its
+    // contract is unchanged), but the gate lets the route through to the battle-only reader.
+    for (const name of ['Mega-Charizard-X', 'Charizard-Mega-Y', 'Primal-Groudon', 'Primal-Kyogre', 'Charizard-Gmax', 'Gengar-Gmax']) {
       expect(getSpeciesNatDex(name), name).toBeNull();
-      expect(isUnknownWikiDetailName('/pokemon/' + encodeURIComponent(name)), name).toBe(true);
+      expect(getBattleOnlySpeciesNatDex(name), name).not.toBeNull();
+      expect(isUnknownWikiDetailName('/pokemon/' + encodeURIComponent(name)), name).toBe(false);
     }
     // @pkmn reads "Mega-Yan" as Yanmega (the id "yanmega" is "mega" moved behind "yan").
     expect(getSpeciesNatDex('Mega-Yan')).not.toBeNull();
@@ -162,7 +165,7 @@ describe('isUnknownWikiDetailName', () => {
     for (const name of candidates) {
       let resolves: boolean;
       try {
-        resolves = getSpeciesNatDex(name) !== null;
+        resolves = getSpeciesNatDex(name) !== null || getBattleOnlySpeciesNatDex(name) !== null;
       } catch {
         continue;
       }

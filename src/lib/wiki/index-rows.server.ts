@@ -17,6 +17,7 @@ import {
   getAllMovesNatDex,
   getGeneration,
   getItemNatDex,
+  getBattleOnlySpeciesNatDex,
   getLegalAbilities,
   getMoveNatDex,
   getSpeciesNatDex,
@@ -200,6 +201,48 @@ export function getWikiSpeciesDetail(name: string): WikiSpeciesDetail | null {
       abilities,
       legalAbilities: getLegalAbilities(species.name, resolvedGen),
       typeInfo,
+    };
+  });
+}
+
+export interface WikiSpeciesFormeDetail extends WikiSpeciesDetail {
+  /** Base species the battle-only forme belongs to (e.g. 'Charizard' for 'Charizard-Mega-Y'). */
+  baseName: string;
+}
+
+/**
+ * Battle-only forme pages (issue #141): stats, types and abilities come from the forme; the page
+ * links back to the base species through `baseName`. The ability list is the forme's own — Mega,
+ * Primal and Gigantamax formes have fixed battle abilities, so there is no ruleset legality lookup.
+ */
+export function getWikiSpeciesFormeDetail(name: string): WikiSpeciesFormeDetail | null {
+  const key = detailKey('forme', name);
+  if (!key) return null;
+  return memoDetail(key, () => {
+    const resolved = getBattleOnlySpeciesNatDex(name);
+    if (!resolved) return null;
+    const { entity: species, resolvedGen, baseName } = resolved;
+    // Gigantamax formes are absent from the Generations tables; their types are the base species'.
+    const typeInfo = getSpeciesTypeInfo(species.name, resolvedGen) ?? getSpeciesTypeInfo(baseName, resolvedGen);
+    const abilities: string[] = [];
+    const legalAbilities: { name: string; slot: string }[] = [];
+    for (const slot of ABILITY_SLOTS) {
+      const abilityName = species.abilities[slot];
+      if (abilityName) {
+        abilities.push(abilityName);
+        legalAbilities.push({ name: abilityName, slot });
+      }
+    }
+    const { hp, atk, def, spa, spd, spe } = species.baseStats;
+    return {
+      name: species.name,
+      resolvedGen,
+      types: typeInfo?.types ?? [],
+      baseStats: { hp, atk, def, spa, spd, spe },
+      abilities,
+      legalAbilities,
+      typeInfo,
+      baseName,
     };
   });
 }

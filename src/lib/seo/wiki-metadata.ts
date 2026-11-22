@@ -12,6 +12,7 @@ import {
   getWikiItemDetail,
   getWikiMoveDetail,
   getWikiSpeciesDetail,
+  getWikiSpeciesFormeDetail,
   getWikiTypeMatchups,
   resolveWikiTeraType,
 } from '@/lib/wiki/index-rows.server';
@@ -33,7 +34,7 @@ function clip(text: string): string {
 }
 
 export async function speciesMetadata(rawName: string): Promise<Metadata> {
-  const species = getWikiSpeciesDetail(rawName);
+  const species = getWikiSpeciesDetail(rawName) ?? getWikiSpeciesFormeDetail(rawName);
   if (!species) return {};
   const [t, dataLocale] = await Promise.all([getT(metaMessages), getDataLocale()]);
   const name = localizeSpecies(species.name, dataLocale);

@@ -10,6 +10,7 @@ import {
   getWikiItemDetail,
   getWikiMoveDetail,
   getWikiSpeciesDetail,
+  getWikiSpeciesFormeDetail,
   getWikiTeraTypes,
   getWikiTypeMatchups,
   resetWikiMemoForTests,
@@ -135,6 +136,26 @@ describe('wiki detail data (bounded memo)', () => {
     expect(getWikiMoveDetail('Not A Move')).toBeNull();
     expect(getWikiItemDetail('')).toBeNull();
     expect(getWikiSpeciesDetail('Glurak')).toBeNull();
+  });
+
+  it('resolves a battle-only forme of each class to its forme data plus the base species (#141)', () => {
+    const mega = getWikiSpeciesFormeDetail('Charizard-Mega-X');
+    expect(mega?.baseName).toBe('Charizard');
+    expect(mega?.types).toEqual(['Fire', 'Dragon']);
+    expect(mega?.baseStats.atk).toBeGreaterThan(84); // base Charizard is 84
+
+    const primal = getWikiSpeciesFormeDetail('Primal Groudon');
+    expect(primal?.baseName).toBe('Groudon');
+    expect(primal?.types).toContain('Fire');
+
+    const gmax = getWikiSpeciesFormeDetail('Gengar-Gmax');
+    expect(gmax?.baseName).toBe('Gengar');
+    expect(gmax?.types).toEqual(['Ghost', 'Poison']); // the Generations tables lack gmax types: the base fills in
+
+    // The standard detail still hides formes, and unknown forme names resolve to nothing.
+    expect(getWikiSpeciesDetail('Charizard-Mega-X')).toBeNull();
+    expect(getWikiSpeciesFormeDetail('Not A Forme')).toBeNull();
+    expect(getWikiSpeciesFormeDetail('Charizard')).toBeNull(); // not a battle-only forme
   });
 
   it('evicts the oldest entry past the cap', () => {
