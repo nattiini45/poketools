@@ -3,7 +3,8 @@
  * `getCompletedMatchRecords`, `getCompletedMatchRecordsBatch` and `getPlayerIdsWithCompletedMatches`
  * used an unordered `.limit(2000)`, which the server cut to 1000 rows without a signal, so standings
  * and profile composition lost matches in large stages. They now page `.range()` on (created_at, id)
- * and stay ONE query for a result of 1000 rows or fewer.
+ * unbounded (`readAllPages`, issue #134: no standings input may be a truncated prefix), which settles
+ * a short page with one extra empty request.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeSupabase, type FakeRow, type FakeSupabase } from '@/lib/worlds/__tests__/fake-postgrest';
@@ -111,12 +112,13 @@ describe('getCompletedMatchRecords', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('reads 3 rows in exactly ONE query and maps them as before', async () => {
+  it('reads 3 rows and maps them as before (a short page settles with one empty page)', async () => {
     const f = use(completedRows(3));
 
     const records = await getCompletedMatchRecords(T);
 
-    expect(f.queries).toHaveLength(1);
+    // `readAllPages` cannot prove the end on a short page, so it reads one empty page.
+    expect(f.queries).toHaveLength(2);
     expect(records).toEqual(expectedRecords(3));
     expect(warn).not.toHaveBeenCalled();
   });
@@ -126,7 +128,7 @@ describe('getCompletedMatchRecords', () => {
 
     const records = await getCompletedMatchRecords('e-stage-1');
 
-    expect(f.queries).toHaveLength(1);
+    expect(f.queries).toHaveLength(2);
     expect(records).toEqual(expectedRecords(3));
   });
 
@@ -140,14 +142,15 @@ describe('getCompletedMatchRecords', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it('stops at the 20,000-row bound and logs a warning naming the reader', async () => {
-    use(completedRows(20_001));
+  it('reads every completed match past the 20,000-row bound of the bounded readers, with no warning (#134)', async () => {
+    use(completedRows(20_500));
 
     const records = await getCompletedMatchRecords(T);
 
-    expect(records).toHaveLength(20_000);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(String(warn.mock.calls[0][0])).toContain('getCompletedMatchRecords');
+    expect(records).toHaveLength(20_500);
+    expect(records[0].match_id).toBe(idOf(0));
+    expect(records[20_499].match_id).toBe(idOf(20_499));
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('rethrows a client error', async () => {
@@ -170,7 +173,7 @@ describe('getCompletedMatchRecordsBatch', () => {
     const f = use(completedRows(1).map((row) => ({ ...row, bracket_side: 'grand_finals', bracket_pos: 1 })));
     const records = await getCompletedMatchRecordsBatch([T]);
     expect(records.get(T)).toEqual([{ ...expectedRecord(0), bracket_side: 'grand_finals', bracket_pos: 1 }]);
-    expect(f.queries).toHaveLength(1);
+    expect(f.queries).toHaveLength(2);
   });
   it('returns every row of 2345 matches over 3 tournaments, grouped per tournament in read order', async () => {
     // Interleave tournaments by index so each page mixes them.
@@ -205,14 +208,23 @@ describe('getCompletedMatchRecordsBatch', () => {
     }
   });
 
-  it('keys only tournaments that have rows, in ONE query for a short result', async () => {
+  it('keys only tournaments that have rows, with one empty page settling a short result', async () => {
     const f = use(completedRows(3, 't-1'));
 
     const result = await getCompletedMatchRecordsBatch(['t-1', 't-empty']);
 
-    expect(f.queries).toHaveLength(1);
+    expect(f.queries).toHaveLength(2);
     expect([...result.keys()]).toEqual(['t-1']);
     expect(result.get('t-1')).toEqual(expectedRecords(3));
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('reads every completed match past the 20,000-row bound of the bounded readers, with no warning (#134)', async () => {
+    use(completedRows(20_500));
+
+    const result = await getCompletedMatchRecordsBatch([T]);
+
+    expect(result.get(T)).toHaveLength(20_500);
     expect(warn).not.toHaveBeenCalled();
   });
 

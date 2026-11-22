@@ -1884,12 +1884,14 @@ export async function hasDownstreamMatches(
 /**
  * Get match records for standings computation.
  * Only returns completed matches with their winner. Pages the full result (oldest first) past the
- * PostgREST `max_rows` ceiling; a result of 1,000 rows or fewer is ONE query.
+ * PostgREST `max_rows` ceiling; a result of 1,000 rows or fewer is ONE query. Unbounded like the
+ * `getPairedMatchRecords` sibling: a standings table computed from a truncated match list would
+ * silently undercount the matches past the bound (issue #134).
  */
 export async function getCompletedMatchRecords(
   tournamentId: string
 ): Promise<MatchRecord[]> {
-  const { rows } = await readBoundedPages(
+  const rows = await readAllPages(
     (from, to) =>
       supabase
         .from('matches')
@@ -1899,7 +1901,6 @@ export async function getCompletedMatchRecords(
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to),
-    { label: `getCompletedMatchRecords tournament ${tournamentId}` },
   );
 
   return rows.map((row) => ({
@@ -1942,14 +1943,15 @@ export async function getPairedMatchRecords(tournamentId: string): Promise<Match
 /**
  * Batch-fetch completed match records for multiple tournaments in one paged read.
  * Returns a Map keyed by tournament_id. Used by profile composition
- * to avoid N+1 queries when computing standings.
+ * to avoid N+1 queries when computing standings. Unbounded for the same reason
+ * as `getCompletedMatchRecords` (issue #134): no standings input may be a prefix.
  */
 export async function getCompletedMatchRecordsBatch(
   tournamentIds: string[]
 ): Promise<Map<string, MatchRecord[]>> {
   if (tournamentIds.length === 0) return new Map();
 
-  const { rows } = await readBoundedPages(
+  const rows = await readAllPages(
     (from, to) =>
       supabase
         .from('matches')
@@ -1959,7 +1961,6 @@ export async function getCompletedMatchRecordsBatch(
         .order('created_at', { ascending: true })
         .order('id', { ascending: true })
         .range(from, to),
-    { label: `getCompletedMatchRecordsBatch ${tournamentIds.length} tournaments` },
   );
 
   const result = new Map<string, MatchRecord[]>();
@@ -2001,7 +2002,9 @@ export async function getPlayerIdsWithCompletedMatches(
 ): Promise<Set<string>> {
   if (tournamentIds.length === 0) return new Set();
 
-  const { rows } = await readBoundedPages(
+  // Unbounded like the standings readers above: a truncated set would read a
+  // player who has completed matches as one who has none (issue #134).
+  const rows = await readAllPages(
     (from, to) =>
       supabase
         .from('matches')
@@ -2010,7 +2013,6 @@ export async function getPlayerIdsWithCompletedMatches(
         .eq('status', 'completed')
         .order('id', { ascending: true })
         .range(from, to),
-    { label: `getPlayerIdsWithCompletedMatches ${tournamentIds.length} tournaments` },
   );
 
   const result = new Set<string>();

@@ -828,7 +828,7 @@ describe('getCompletedMatchRecords', () => {
       winner_id: 'p1',
       rounds: { round_number: 3 },
     };
-    // Chain: .eq().eq().order().order().range() — range is terminal; a short page ends the read
+    // Chain: .eq().eq().order().order().range() — range is terminal; an empty page ends the read
     mockBuilder.range.mockResolvedValueOnce({ data: [row], error: null });
 
     const result = await getCompletedMatchRecords('t1');
@@ -839,7 +839,8 @@ describe('getCompletedMatchRecords', () => {
       winner_id: 'p1',
       round_number: 3,
     });
-    expect(mockBuilder.range).toHaveBeenCalledTimes(1);
+    // `readAllPages` cannot prove the end on a short page, so it reads one empty page (#134).
+    expect(mockBuilder.range).toHaveBeenCalledTimes(2);
     expect(mockBuilder.range).toHaveBeenCalledWith(0, 999);
     expect(mockBuilder.limit).not.toHaveBeenCalled();
   });
