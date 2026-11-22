@@ -38,9 +38,10 @@ describe('diagnostic vocabulary', () => {
   });
 
   it('is quoted by the docs with the catalogue size', () => {
+    const PRE_PHASE_3_CODES = 59; // the codes the compiler had before the Phase 3 sections were added
     const doc = (name: string) => readFileSync(path.join(process.cwd(), 'docs', name), 'utf8');
     expect(doc('format-kit.md')).toContain(`reports ${DIAGNOSTIC_CODES.length} codes in all`);
-    expect(doc('format-kit.md')).toContain(`The ${DIAGNOSTIC_CODES.length - 59} added since`);
+    expect(doc('format-kit.md')).toContain(`The ${DIAGNOSTIC_CODES.length - PRE_PHASE_3_CODES} added since`);
     expect(doc('modules-index.md')).toContain(`${DIAGNOSTIC_CODES.length} diagnostic codes`);
   });
 
