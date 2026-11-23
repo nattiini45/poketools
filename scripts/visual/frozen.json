@@ -491,7 +491,7 @@
         "[data-frozen=\"epb-replay\"]"
       ],
       "click": "[data-frozen=\"epb-replay\"] button",
-      "settleMs": 3000
+      "settleMs": 5000
     },
     {
       "id": "epb-roster-card",
