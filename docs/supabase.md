@@ -58,6 +58,8 @@ const player = await getPlayerById(playerId);
 ```
 
 ## Testing
+
+- **Test Files — `src/lib/supabase/`**: `src/lib/supabase/__tests__/` (20 test files): `admin-agent-tables-migration.test.ts`, `aggregate-apply-migration.test.ts`, `api-role-grants.local.test.ts`, `auth-client.test.ts`, `client.test.ts`, `format-migration-locks.test.ts`, `format-notifications-migration.test.ts`, `format-runtime-migrations.test.ts`, `format-studio-migrations.test.ts`, `format-substitute-migration.test.ts`, `metering.test.ts`, `migration-api-grants.test.ts`, `players-guest-identity-migration.test.ts`, `players-session-epoch-guard-migration.test.ts`, `postgrest-filter.test.ts`, `read-all-pages.test.ts`, `read-bounded-pages.test.ts`, `rounds-bye-migration.test.ts`, `timeout-fetch.integration.test.ts`, `timeout-fetch.test.ts`.
 - **Test Files**: Covered primarily through API route tests
 - **Testing Approach**: Integration tests against query consumers
 - **Database grants**: `__tests__/migration-api-grants.test.ts` (static, in CI) replays `supabase/migrations/` and fails if `anon`, `authenticated` or `PUBLIC` can reach anything in `public` (object grant, default privilege, role membership, a recreated object without the close-out) or a table lacks RLS. `__tests__/api-role-grants.local.test.ts` (LIVE-LOCAL, opt-in with `LOCAL_SUPABASE_GRANTS=1`, local stack only) probes REST as both roles.

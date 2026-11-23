@@ -80,6 +80,8 @@ const dataUrl = await renderAvatar(config, { output: 'data-url' });
 ```
 
 ## Testing
+
+- **Test Files — `src/lib/avatar/`**: `src/lib/avatar/__tests__/` (11 test files): `consent.test.ts`, `manifest.test.ts`, `nanogpt.test.ts`, `preloader.test.ts`, `prompt-template.test.ts`, `rate-limit.test.ts`, `renderer.test.ts`, `showdown-sprite.test.ts`, `thumbnail-path.test.ts`, `thumbnail.test.ts`, `transform.test.ts`.
 - **Test Files**: `src/components/avatar/__tests__/AvatarBuilder.onSaved.test.tsx` (awaited `onSaved`, single-flight saves, tab lock), `src/components/avatar/__tests__/AiAvatarGenerator.test.tsx`
 - **Testing Approach**: Component handlers driven without a renderer (hooks mocked), plus route/UI integration coverage
 

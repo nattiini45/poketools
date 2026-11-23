@@ -229,6 +229,8 @@ await generateEliminationBracket(tournament, participantsWithSeeds);
 ```
 
 ## Testing
+
+- **Test Files — `src/lib/tournament/`**: `src/lib/tournament/__tests__/` (48 test files): `best-of.test.ts`, `bipartite.test.ts`, `bracket-generate.test.ts`, `bracket-propagation.test.ts`, `bracket-structure.test.ts`, `bracket-write.local.test.ts`, `byes-legacy.test.ts`, `byes.test.ts`, `clinch-scenarios-byes.test.ts`, `clinch-scenarios.test.ts`, `double-elim.test.ts`, `enrollment-sync-groups.test.ts`, `enrollment-sync-kit-merge.test.ts`, `enrollment-sync.test.ts`, `evolution-standings.test.ts`, `generate-options.test.ts`, `group-first-half.test.ts`, `group-rounds.test.ts`, `group-schedule.test.ts`, `group-standings.test.ts`, `index.test.ts`, `league-phase-names.test.ts`, `league-placings.test.ts`, `match-machine-parity.test.ts`, `match-state.test.ts`, `match-timestamps-sql.test.ts`, `match-timestamps.test.ts`, `page-view.test.ts`, `round-machine-sql-parity.test.ts`, `round-robin.test.ts`, `round-state.test.ts`, `schedule-drift.test.ts`, `scoring-byes.test.ts`, `scratch-generate.test.ts`, `scratch-lb.test.ts`, `season-standings-context.test.ts`, `serpentine.test.ts`, `settings-patch.test.ts`, `single-elim.test.ts`, `standalone-lock.test.ts`, `standings-dispatch.test.ts`, `standings-rules.test.ts`, `standings.test.ts`, `startup-checklist.server.test.ts`, `startup-checklist.test.ts`, `swiss-filter.test.ts`, `swiss.test.ts`, `tournament-machine-sql-parity.test.ts`.
 - **Test Files**: `src/lib/tournament/__tests__/*`, `src/app/api/seasons/[id]/phases/__tests__/route.test.ts`, `src/app/api/tournaments/__tests__/season-id-reject.test.ts`
 - **Running Tests**: `npm run test src/lib/tournament/__tests__/`
 

@@ -4,6 +4,21 @@
 
 Web Push puts a player's turn alerts on their devices even when no PokéTools page is open. The server sends them; the browser's push service delivers them to a service worker, which shows the notification.
 
+## File Structure
+
+```
+src/lib/push/
+├── client.ts         client-side subscription helpers (browser API, VAPID key handling)
+├── config.ts         VAPID configuration and environment checks
+├── device-state.ts   the bell's device-state model (enabled, unsupported, denied, per-device)
+├── draft-alerts.ts   `pushDraftClaims`: turns the draft's claimed notifications into sends
+├── endpoint.ts       subscription endpoint allow-list and push-service URL checks
+├── payload.ts        the JSON `{ kind, title, body, url, tag }` a push carries, built server-side
+├── send.ts           the web-push sender: signing, delivery, stale-subscription cleanup
+├── user-agent.ts     the device's User-Agent label (the raw string is never stored)
+└── validation.ts     request-body validation for subscribe / unsubscribe
+```
+
 ## What is sent, and when
 
 Pushes ride the draft's existing notification claims. `draft_claim_notifications` claims every due event exactly once in SQL (claim markers on the slot or pool, `FOR UPDATE SKIP LOCKED`); `dispatchDraftNotifications` (`src/lib/draft/notify.ts`) turns the claims into Discord events and then calls `pushDraftClaims` (`src/lib/push/draft-alerts.ts`) with the same claims. There is no second scheduler, so a push is exactly as often as a Discord ping, and quiet hours, pauses and slot changes are already decided by the claim.
@@ -108,8 +123,9 @@ There is no monochrome badge asset yet, so notifications carry only the icon (`/
 
 Each device a player turns on stores one push endpoint and its two public key parts with the account until the player removes the device, the push service reports it gone, five sends in a row fail, or the account is deleted. The endpoint is sent to the browser vendor's push service (Google, Mozilla, Microsoft or Apple) with every message, and the vendor's service delivers the encrypted payload; PokéTools stores no User-Agent string and no other device data. The settings card states this in the player's language (`push` namespace, `settings.privacy`).
 
-## Tests
+## Testing
 
+- **Test Files — `src/lib/push/`**: `src/lib/push/__tests__/` (12 test files): `client.test.ts`, `config.test.ts`, `device-state.test.ts`, `draft-alerts.test.ts`, `endpoint.test.ts`, `migration.test.ts`, `payload.test.ts`, `send.test.ts`, `service-worker.test.ts`, `user-agent.test.ts`, `validation.test.ts`, `web-push-contract.test.ts`.
 - `src/lib/push/__tests__/`: the endpoint allow-list, the request schemas, the VAPID configuration, the payload text per language, the sender (410 deletes, failure counting and the limit, concurrency, TTL clamp, nothing sent when disabled), the claim to push mapping, the service worker handlers (the real `public/sw.js` run in a `vm` context), the browser layer (`client.ts` against faked browser APIs), the user-agent labels and the migration text.
 - `src/lib/draft/__tests__/notify-push.test.ts`: the dispatch hands the same claims to the push hook, awaited, and a push failure never breaks it. The existing Discord tests are unchanged.
 - `src/app/api/push/subscriptions/__tests__/route.test.ts`: auth, ownership, rate limit, bad bodies, allow-list, cross-origin, disabled.

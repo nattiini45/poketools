@@ -613,11 +613,16 @@ describe('docs/feature-flags.md', () => {
 
 // ── Module doc trees and test-file claims ────────────────────────────────────────────────────────
 
-/** The first fenced block under `## File Structure`, or null. */
+/**
+ * The first fenced block under a `File Structure` heading of any level (`##` or `###`;
+ * issue #128 — a `###` heading used to hide the whole doc from the guard), or null.
+ */
 export function fileStructureBlock(doc) {
+  const heading = doc.split('\n').find((l) => /^#+ File Structure\s*$/.test(l));
+  if (!heading) return null;
   let body;
   try {
-    body = section(doc, '## File Structure');
+    body = section(doc, heading);
   } catch {
     return null;
   }
@@ -640,7 +645,7 @@ const DOC_MODULES = {
  * Modules a doc summarizes instead of covering: it may root them without naming every top-level
  * file (worlds.md's route-world tree is an intentional overview of a 50+ file module).
  */
-const SUMMARIZED_MODULES = { worlds: ['route-world'] };
+const SUMMARIZED_MODULES = { worlds: ['route-world'], 'format-kit': ['format-engine', 'format-studio'] };
 
 /** Directory roots of a tree: lines that start at column 0 with `src/lib/<module>/` and name no file. */
 export function treeRoots(block) {
@@ -678,13 +683,18 @@ const testFilesIn = (dir) =>
   publicFiles(dir).filter((f) => posix.dirname(f) === dir && /\.test\.(tsx?|mjs)$/.test(f));
 
 describe('module docs: file structure trees', () => {
-  const docsWithTrees = publicFiles('docs')
+  const allDocFiles = publicFiles('docs')
     .filter((f) => /^docs\/[^/]+\.md$/.test(f))
     .map((f) => {
       const block = fileStructureBlock(read(f));
       return { f, block, name: posix.basename(f, '.md') };
-    })
-    .filter(({ block }) => block !== null);
+    });
+  const docsWithTrees = allDocFiles.filter(({ block }) => block !== null);
+  // A doc whose name is a populated module with no tree is a module doc that names nothing
+  // (issue #128 — docs/push.md used to slip through this way); its block is treated as empty.
+  const docsWithoutTrees = allDocFiles
+    .filter(({ block, name }) => block === null && topLevelFiles(name).length > 0)
+    .map((entry) => ({ ...entry, block: '' }));
   const moduleDocs = docsWithTrees
     .map(({ f, block, name }) => ({ f, block, modules: ownedModules(name, block) }))
     .filter(({ modules }) => modules.length > 0);
@@ -703,6 +713,12 @@ describe('module docs: file structure trees', () => {
         for (const file of uncoveredFiles(block, topLevelFiles(name))) missing.push(`${f}: src/lib/${name}/${file}`);
       }
     }
+    expect(missing).toEqual([]);
+  });
+
+  it('has a tree for every doc that names a populated module (issue #128)', () => {
+    // Without this the tree-less module doc is invisible to every check above.
+    const missing = docsWithoutTrees.flatMap(({ f, name }) => topLevelFiles(name).map((file) => `${f}: src/lib/${name}/${file}`));
     expect(missing).toEqual([]);
   });
 
@@ -769,6 +785,51 @@ describe('module docs: test-file claims', () => {
       }
     }
     expect(wrong).toEqual([]);
+  });
+
+  // Issue #128: a module doc whose module has a populated __tests__ directory needs a
+  // `## Testing` section that names every one of those files — a reader looks there
+  // for the suite; a doc that points at another module's tests (or none) hides it.
+  describe('testing sections name the module\'s own suite', () => {
+    const moduleTestDirs = (docName) =>
+      (DOC_MODULES[docName] ?? [docName])
+        .map((m) => `src/lib/${m}/__tests__`)
+        .filter((dir) => testFilesIn(dir).length > 0);
+
+    const moduleDocs = publicFiles('docs')
+      .filter((f) => /^docs\/[^/]+\.md$/.test(f))
+      .map((f) => ({ f, name: posix.basename(f, '.md'), dirs: moduleTestDirs(posix.basename(f, '.md')) }))
+      .filter(({ dirs }) => dirs.length > 0);
+
+    it('names every test file of its module in a `## Testing` section', () => {
+      const missing = [];
+      for (const { f, dirs } of moduleDocs) {
+        let body;
+        try {
+          body = section(read(f), '## Testing');
+        } catch {
+          missing.push(`${f}: no ## Testing section`);
+          continue;
+        }
+        for (const dir of dirs) {
+          for (const tf of testFilesIn(dir).map((t) => posix.basename(t))) {
+            if (!body.includes(tf)) missing.push(`${f}: ${dir}/${tf}`);
+          }
+        }
+      }
+      expect(missing).toEqual([]);
+    });
+
+    it('notices a planted omission', () => {
+      // Build the doc a file short: the check must name exactly that file.
+      const { f, dirs } = moduleDocs.find(({ name }) => name === 'validation');
+      const files = testFilesIn(dirs[0]).map((t) => posix.basename(t));
+      const doc = `# V\n\n## Testing\n\n- **Test Files**: ${files.slice(1).map((t) => `\`${t}\``).join(', ')}\n`;
+      const dropped = files[0];
+      const misses = files.filter((tf) => !doc.includes(tf));
+      expect(misses).toEqual([dropped]);
+      expect(f).toBe('docs/validation.md');
+    });
   });
 });
 
