@@ -21,6 +21,10 @@ vi.mock('next/server', async importOriginal => ({ ...await importOriginal<typeof
 vi.mock('next/cache', () => ({ revalidateTag: h.tag, revalidatePath: h.path }));
 vi.mock('@/lib/auth/helpers', () => ({ requirePlayer: h.auth }));
 vi.mock('@/lib/supabase/client', () => ({ supabase: { from: h.unexpectedDb, rpc: h.enqueueRpc } }));
+vi.mock('@/lib/supabase/queries/aggregate-rebuild-lock', async importOriginal => ({
+  ...await importOriginal<typeof import('@/lib/supabase/queries/aggregate-rebuild-lock')>(),
+  assertNoAggregateRebuild: async () => {},
+}));
 vi.mock('@/lib/supabase/queries/phase-admins', () => ({ isPhaseAdminFor: h.admin }));
 vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: h.mode }));
 vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({

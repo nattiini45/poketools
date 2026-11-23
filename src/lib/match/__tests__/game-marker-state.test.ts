@@ -48,7 +48,7 @@ describe('game marker machines', () => {
     it('apply_aggregate_job counts only an uncounted game, marker and counts in one transaction', () => {
       const t = transition(spec, 'apply');
       expect(t.from).toEqual(['uncounted']);
-      const { body } = lastSqlFunction('apply_aggregate_job');
+      const { body } = lastSqlFunction('apply_aggregate_job_inner');
       expect(body).toContain('SELECT aggregate_applied_at INTO v_applied_at FROM games WHERE id = p_game_id FOR UPDATE;');
       expect(body).toContain("IF v_applied_at IS NOT NULL THEN RETURN 'already_applied';");
       expect(body.indexOf('batch_upsert_aggregates')).toBeLessThan(body.indexOf('UPDATE games SET aggregate_applied_at = now()'));
@@ -57,7 +57,7 @@ describe('game marker machines', () => {
     it('rollback_game_aggregates rolls back only a counted game, fenced on the expected marker', () => {
       const t = transition(spec, 'rollback');
       expect(t.from).toEqual(['counted']);
-      const { body } = lastSqlFunction('rollback_game_aggregates');
+      const { body } = lastSqlFunction('rollback_game_aggregates_inner');
       expect(body).toContain('FROM games WHERE id = p_game_id FOR UPDATE;');
       expect(body).toContain("IF v_applied_at IS NULL THEN RETURN 'not_applied';");
       expect(body).toContain("IF v_applied_at IS DISTINCT FROM p_expected_applied_at THEN RETURN 'marker_changed';");

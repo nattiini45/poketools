@@ -180,13 +180,13 @@ describe('native aggregate state SQL fences', () => {
   it('shares the pure transition rules with dedicated native writers', () => {
     expect(phaseAggregateJobMachine.sourcesOf('cancelled')).toEqual(['pending', 'processing']);
     expect(phaseGameAggregateMarkerMachine.sourcesOf('counted')).toEqual(['uncounted']);
-    const apply = lastSqlFunction('apply_phase_aggregate_job').body;
+    const apply = lastSqlFunction('apply_phase_aggregate_job_inner').body;
     expect(apply).toContain("WHERE id = p_job_id AND status = 'processing'");
     expect(apply).toContain('FROM public.phase_games WHERE id = p_game_id FOR UPDATE');
     expect(apply.indexOf('public.phase_aggregate_deltas')).toBeLessThan(apply.indexOf('UPDATE public.phase_games SET aggregate_applied_at'));
-    const rollback = lastSqlFunction('rollback_phase_game_aggregates').body;
+    const rollback = lastSqlFunction('rollback_phase_game_aggregates_inner').body;
     expect(rollback).toContain('FOR UPDATE OF g');
     expect(rollback).toContain('v_applied_at IS DISTINCT FROM p_expected_applied_at');
-    expect(lastSqlFunction('claim_phase_aggregate_jobs').body).toContain('FOR UPDATE SKIP LOCKED');
+    expect(lastSqlFunction('claim_phase_aggregate_jobs_inner').body).toContain('FOR UPDATE SKIP LOCKED');
   });
 });

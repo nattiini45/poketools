@@ -31,7 +31,7 @@ export const gameAggregateMarkerMachine = defineMachine({
       to: 'counted',
       actors: ['queue', 'admin'],
       writers: [
-        'supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job',
+        'supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job_inner',
         'src/lib/supabase/queries/aggregates.ts',
         'src/lib/match/aggregate-queue.ts',
       ],
@@ -43,7 +43,7 @@ export const gameAggregateMarkerMachine = defineMachine({
       to: 'uncounted',
       actors: ['admin'],
       writers: [
-        'supabase/migrations/20261018170000_aggregate_rollback_atomic.sql#rollback_game_aggregates',
+        'supabase/migrations/20261018170000_aggregate_rollback_atomic.sql#rollback_game_aggregates_inner',
         'src/lib/supabase/queries/aggregates.ts',
         PIPELINE,
       ],
