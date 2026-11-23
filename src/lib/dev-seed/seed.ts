@@ -5,7 +5,8 @@
  *
  * Idempotent: every step looks for what it would create first, so a second run changes nothing. The league is the one
  * named `DEV_SEED_LEAGUE_NAME`; the example pack's rules apply (nothing here reads a pack), and the ruleset is the
- * standard Gen 9 OU one.
+ * standard Gen 9 OU one. On a stack whose `phase_storage_state.mode` is `phase` or `frozen_phase` the league stage is
+ * written on the native phase tables instead, where the legacy-write freeze does not apply.
  */
 import 'server-only';
 
@@ -25,6 +26,7 @@ import { createSeason, updateSeason, addSeasonParticipant } from '@/lib/supabase
 import { addParticipant, createTournament, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { createRound } from '@/lib/supabase/queries/rounds';
 import { createMatchBatch, updateMatchStatus } from '@/lib/supabase/queries/matches';
+import { matchTimestampsFor } from '@/lib/tournament/match-state';
 
 const SEED_RULESET_NAME = FORMAT_DEFAULTS.gen9ou.name;
 /** `players.discord_id` an earlier version of the seed gave its players; such a row is adopted, never duplicated. */
@@ -113,10 +115,10 @@ async function seedRulesetVersionId(): Promise<string> {
   return version.id;
 }
 
-/** The players that are not yet in the league or tournament `id`, in the order given. */
+/** The players that are not yet in the league, tournament or phase `id`, in the order given. */
 async function missingPlayers(
-  table: 'season_participants' | 'tournament_participants',
-  column: 'season_id' | 'tournament_id',
+  table: 'season_participants' | 'tournament_participants' | 'phase_participants',
+  column: 'season_id' | 'tournament_id' | 'phase_id',
   id: string,
   playerIds: string[],
 ): Promise<string[]> {
@@ -186,6 +188,101 @@ async function ensureStage(leagueId: string, versionId: string, playerIds: strin
   return tournamentId;
 }
 
+/** The storage generation the local stack runs; 'legacy' when the state table does not answer (pre-P5 stacks). */
+async function readStorageMode(): Promise<string> {
+  const state = await supabase.from('phase_storage_state').select('mode').limit(1);
+  if (state.error) return 'legacy';
+  return state.data?.[0]?.mode ?? 'legacy';
+}
+
+/**
+ * The phase-mode twin of `ensureStage`: same league shape on the native tables (`league_phases`, `phase_participants`,
+ * `phase_rounds`, `phase_matches`), which the legacy-write freeze leaves open to the service role. Resumes an
+ * interrupted run by the same `upcoming` rule.
+ */
+async function ensurePhaseStage(leagueId: string, versionId: string, playerIds: string[]): Promise<string> {
+  const stages = await supabase.from('league_phases').select('id, status').eq('season_id', leagueId).order('stage_order').limit(1);
+  if (stages.error) throw stages.error;
+  const existing = stages.data?.[0];
+  if (existing && existing.status !== 'upcoming') return existing.id;
+
+  let phaseId = existing?.id;
+  if (!phaseId) {
+    const created = await supabase
+      .from('league_phases')
+      .insert({
+        name: DEV_SEED_TOURNAMENT_NAME,
+        season_id: leagueId,
+        bracket_type: 'round_robin',
+        ruleset_id: versionId,
+        best_of_default: 1,
+        is_doubles: false,
+        team_visibility: 'hidden_until_match',
+        stage_order: 1,
+      })
+      .select('id')
+      .single();
+    if (created.error) throw created.error;
+    phaseId = created.data.id;
+  }
+  for (const playerId of await missingPlayers('phase_participants', 'phase_id', phaseId, playerIds)) {
+    const added = await supabase.from('phase_participants').insert({ phase_id: phaseId, player_id: playerId });
+    if (added.error) throw added.error;
+  }
+
+  const rounds = await supabase.from('phase_rounds').select('id').eq('phase_id', phaseId).eq('round_number', 1).limit(1);
+  if (rounds.error) throw rounds.error;
+  let roundId = rounds.data?.[0]?.id;
+  if (!roundId) {
+    const created = await supabase
+      .from('phase_rounds')
+      .insert({ phase_id: phaseId, name: 'Round 1', round_number: 1, best_of: 1 })
+      .select('id')
+      .single();
+    if (created.error) throw created.error;
+    roundId = created.data.id;
+  }
+
+  const written = await supabase
+    .from('phase_matches')
+    .select('id, player_1_id, status')
+    .eq('phase_id', phaseId)
+    .order('created_at')
+    .order('id');
+  if (written.error) throw written.error;
+  let matches = written.data;
+  if (!matches?.length) {
+    const created = await supabase
+      .from('phase_matches')
+      .insert(
+        [0, 1, 2, 3].map((i) => ({
+          round_id: roundId,
+          phase_id: phaseId,
+          player_1_id: playerIds[i * 2],
+          player_2_id: playerIds[i * 2 + 1],
+        })),
+      )
+      .select('id, player_1_id, status');
+    if (created.error) throw created.error;
+    matches = created.data;
+  }
+  // Two finished matches and two still to play, same as the legacy stage.
+  if (matches.every((match) => match.status === 'scheduled')) {
+    for (const match of matches.slice(0, 2)) {
+      const done = await supabase
+        .from('phase_matches')
+        .update({ status: 'completed', winner_id: match.player_1_id, ...matchTimestampsFor('scheduled', 'completed') })
+        .eq('id', match.id)
+        .eq('status', 'scheduled');
+      if (done.error) throw done.error;
+    }
+  }
+
+  const activated = await supabase.from('league_phases').update({ status: 'active', current_round: 1 }).eq('id', phaseId);
+  if (activated.error) throw activated.error;
+  return phaseId;
+}
+
 /** Creates the league when it is missing and completes what an interrupted run left; never deletes or resets data. */
 async function ensureLeague(playerIds: string[]): Promise<{ leagueId: string; tournamentId: string; created: boolean }> {
   const versionId = await seedRulesetVersionId();
@@ -203,7 +300,11 @@ async function ensureLeague(playerIds: string[]): Promise<{ leagueId: string; to
     await addSeasonParticipant(season.id, playerId);
   }
 
-  const tournamentId = await ensureStage(season.id, versionId, playerIds);
+  const mode = await readStorageMode();
+  const tournamentId =
+    mode === 'phase' || mode === 'frozen_phase'
+      ? await ensurePhaseStage(season.id, versionId, playerIds)
+      : await ensureStage(season.id, versionId, playerIds);
   if (!existing || existing.status === 'upcoming') await updateSeason(season.id, { status: 'active' });
   return { leagueId: season.id, tournamentId, created: !existing };
 }
