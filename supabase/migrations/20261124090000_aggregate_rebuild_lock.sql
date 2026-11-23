@@ -141,16 +141,17 @@ BEGIN
   -- FOR UPDATE drains every in-flight fenced RPC write (their FOR SHARE) before the lease activates: this
   -- statement waits until the last shared holder commits, so nothing that already passed the fence can
   -- still be writing aggregates when the recount starts. Writers that arrive while this waits queue behind
-  -- it on FOR SHARE and see the active lease when it commits.
+  -- it on FOR SHARE and see the active lease when it commits. clock_timestamp() (wall clock, not transaction
+  -- start) keeps that wait from consuming the lease: the TTL runs from when the claim actually acquired.
   PERFORM 1 FROM public.aggregate_rebuild_lock WHERE id = 1 FOR UPDATE;
   UPDATE public.aggregate_rebuild_lock
      SET holder = v_holder,
          scope_type = p_scope_type,
          scope_id = p_scope_id,
-         acquired_at = now(),
-         heartbeat_at = now(),
-         expires_at = now() + make_interval(secs => p_ttl_seconds)
-   WHERE id = 1 AND expires_at <= now();
+         acquired_at = clock_timestamp(),
+         heartbeat_at = clock_timestamp(),
+         expires_at = clock_timestamp() + make_interval(secs => p_ttl_seconds)
+   WHERE id = 1 AND expires_at <= clock_timestamp();
   IF NOT FOUND THEN
     SELECT holder, scope_type, scope_id, expires_at INTO v_lock
       FROM public.aggregate_rebuild_lock WHERE id = 1;
@@ -179,8 +180,8 @@ BEGIN
     RAISE EXCEPTION 'p_ttl_seconds must be a positive integer' USING ERRCODE = '22023';
   END IF;
   UPDATE public.aggregate_rebuild_lock
-     SET heartbeat_at = now(),
-         expires_at = now() + make_interval(secs => p_ttl_seconds)
+     SET heartbeat_at = clock_timestamp(),
+         expires_at = clock_timestamp() + make_interval(secs => p_ttl_seconds)
    WHERE id = 1 AND holder = p_holder;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'aggregate rebuild lock is not held by % (released or stolen)', p_holder
