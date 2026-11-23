@@ -103,6 +103,9 @@ BEGIN
   IF p_scope_type IS NULL THEN
     RAISE EXCEPTION 'p_scope_type is required' USING ERRCODE = '22004';
   END IF;
+  IF p_ttl_seconds IS NULL OR p_ttl_seconds <= 0 THEN
+    RAISE EXCEPTION 'p_ttl_seconds must be a positive integer' USING ERRCODE = '22023';
+  END IF;
   INSERT INTO public.aggregate_rebuild_lock (id, holder, scope_type, scope_id, expires_at)
   VALUES (1, v_holder, p_scope_type, p_scope_id, now() + make_interval(secs => p_ttl_seconds))
   ON CONFLICT (id) DO UPDATE
@@ -136,6 +139,9 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
+  IF p_ttl_seconds IS NULL OR p_ttl_seconds <= 0 THEN
+    RAISE EXCEPTION 'p_ttl_seconds must be a positive integer' USING ERRCODE = '22023';
+  END IF;
   UPDATE public.aggregate_rebuild_lock
      SET heartbeat_at = now(),
          expires_at = now() + make_interval(secs => p_ttl_seconds)

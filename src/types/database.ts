@@ -814,31 +814,31 @@ export type Database = {
       }
       aggregate_rebuild_lock: {
         Row: {
-          acquired_at: string | null
-          expires_at: string | null
-          heartbeat_at: string | null
-          holder: string | null
+          acquired_at: string
+          expires_at: string
+          heartbeat_at: string
+          holder: string
           id: number
           scope_id: string | null
-          scope_type: string | null
+          scope_type: string
         }
         Insert: {
-          acquired_at?: string | null
-          expires_at?: string | null
-          heartbeat_at?: string | null
-          holder?: string | null
+          acquired_at?: string
+          expires_at: string
+          heartbeat_at?: string
+          holder: string
           id?: number
           scope_id?: string | null
-          scope_type?: string | null
+          scope_type: string
         }
         Update: {
-          acquired_at?: string | null
-          expires_at?: string | null
-          heartbeat_at?: string | null
-          holder?: string | null
+          acquired_at?: string
+          expires_at?: string
+          heartbeat_at?: string
+          holder?: string
           id?: number
           scope_id?: string | null
-          scope_type?: string | null
+          scope_type?: string
         }
         Relationships: []
       }

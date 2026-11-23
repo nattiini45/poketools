@@ -51,7 +51,12 @@ export async function assertNoAggregateRebuild(): Promise<void> {
 
 export async function isAggregateRebuildActive(): Promise<boolean> {
   const { data, error } = await supabase.rpc('aggregate_rebuild_active');
-  if (error) throw error;
+  // Fail open: the probe is only the drain's spin-guard, not a correctness
+  // gate — a transient error must not abort the bounded drain loop.
+  if (error) {
+    console.error('[aggregate-rebuild] lock probe failed:', error);
+    return false;
+  }
   return data === true;
 }
 

@@ -1808,6 +1808,9 @@ export function createGamePipeline<M extends GamePipelineMatch, C extends GamePi
     adminId: string,
     cascade = false
   ): Promise<ResetMatchResult> {
+    // CAS-427: a rebuild fences the per-game rollbacks; refuse up front so a
+    // reset never aborts mid-cascade with siblings already reset.
+    await assertNoAggregateRebuild();
     const { match, tournament } = await getMatchContext(matchId);
 
     if (match.status === 'scheduled') {

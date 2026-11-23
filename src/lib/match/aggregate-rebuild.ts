@@ -39,7 +39,13 @@ import { getPhaseBattleStatsByGame } from '@/lib/supabase/queries/phase-games';
 const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_MAX_ROUNDS = 100;
 const REBUILD_PAGE_SIZE = 100;
-const REBUILD_LOCK_TTL_SECONDS = 120;
+/**
+ * Lock TTL, comfortably above one recount page's worst duration: the fence
+ * only lapses while the holder keeps working when a single page outlasts it,
+ * so the margin must be large. Heartbeats refresh it before every page (and
+ * once after the scope clear, which itself can be slow on a big scope).
+ */
+const REBUILD_LOCK_TTL_SECONDS = 600;
 /**
  * Writer transactions that passed the app-level fence check just before the
  * claim finish inside this window, so their enqueue lands before the fence
@@ -173,6 +179,9 @@ async function rebuildLockedAggregatesForScope(
   // are fenced for its duration, and the post-claim grace lets writer
   // transactions that passed the app-level check finish before this clear.
   const cleared = await clearAggregatesForScope(scopeType, scopeId);
+  // The clear may take a while on a large scope; refresh before the fence
+  // read so the lock cannot lapse between claim and the first page.
+  await heartbeat();
 
   // Fence against the queue, read right after the clear. A game the queue will
   // still count (live increment job, its marker NULL) is left to the queue:
@@ -253,6 +262,8 @@ async function rebuildLockedMixedAggregatesForScope(
   heartbeat: () => Promise<void>
 ): Promise<RebuildAggregatesForScopeResult> {
   const cleared = await clearAggregatesForScope(scopeType, scopeId);
+  // Same as the legacy rebuild: refresh after the (potentially slow) clear.
+  await heartbeat();
   const [phaseLive, phaseBound, legacyLive, legacyBound] = await Promise.all([
     listPhaseGameIdsWithLiveIncrementJobs(), getNewestPhaseGameCreatedAt(),
     scopeType === 'phase' ? new Set<string>() : listGameIdsWithLiveIncrementJobs(),
