@@ -66,7 +66,7 @@ The authoritative component tree lives in `docs/poketools-spec.md` Section 12 (`
 - PKMN Module (`src/lib/pkmn/`) — validation, parsing, format mapping, speed/threat builders
 - Smogon Module (`src/lib/smogon/`) — usage/sets import pipeline from data.pkmn.cc
 - AI Module (`src/lib/ai/`) — coach endpoints, rate limiting
-- Broadcast Module — `BroadcastTeam` family (see `docs/teambuilder-broadcast.md`)
+- Broadcast Module — the legacy `src/components/broadcast/` overlays and tracker (see `docs/teambuilder-broadcast.md`; a v3 `BroadcastTeam` family is planned, not built)
 
 ### Notes
 

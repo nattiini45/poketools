@@ -35,6 +35,7 @@
 - `v3/workspace/MoveTable.tsx` — replaced by `workspace/MovePicker.tsx` (learnset with usage%, filters, sorting).
 - `v3/editor/SetEditorModal.tsx` — replaced by the inline `workspace/SetWorkspace.tsx`.
 - `src/components/teambuilder/SetEditor.tsx` — deleted. Cast Studio edits sets with its own `creator/studio/CastSetEditor.tsx`.
+- `src/components/teambuilder/TeamEditorCore.tsx` — the V2 shell around the modal set editor, deleted in the same rework; `v3/editor/TeamsEditor.tsx` owns its team library, plan and teambuilding modes.
 
 ## Tournament groups write path
 - Status: **revived** (2026-08-22, league phase revamp).

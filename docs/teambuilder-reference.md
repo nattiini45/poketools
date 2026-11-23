@@ -123,9 +123,9 @@ The three are explicit state machines (`docs/state-machines.md`, sections "Team 
 
 | Route | Purpose | File |
 |-------|---------|------|
-| `/teambuilder` | Standalone builder (no tournament) | `src/app/teambuilder/page.tsx` |
-| `/teambuilder/[tid]` | Build team for a tournament | `src/app/teambuilder/[tid]/page.tsx` |
-| `/dashboard/team/[tid]` | Edit existing team | `src/app/dashboard/team/[tid]/page.tsx` |
+| `/teambuilder` | Standalone builder (no tournament) | `src/app/(player)/teambuilder/page.tsx` |
+| `/teambuilder/[tid]` | Build team for a tournament | `src/app/(player)/teambuilder/[tid]/page.tsx` |
+| `/dashboard/team/[tid]` | Edit existing team | `src/app/(player)/dashboard/team/[tid]/page.tsx` |
 
 ---
 
@@ -133,7 +133,7 @@ The three are explicit state machines (`docs/state-machines.md`, sections "Team 
 
 ### Database: `match_prep_teams` table
 
-Created by migration: `supabase/migrations/20260317200000_create_match_prep_teams.sql`
+Created by migration: `supabase/migrations/20260608100000_baseline_professional_schema.sql`
 
 | Column | Type | Notes |
 |--------|------|-------|
@@ -184,12 +184,12 @@ interface MatchPrepTeam {
 
 | Route | Purpose | File |
 |-------|---------|------|
-| `/dashboard/match-prep/[mid]` | Plan team for a specific match | `src/app/dashboard/match-prep/[mid]/page.tsx` |
+| `/dashboard/match-prep/[mid]` | Plan team for a specific match | `src/app/(player)/dashboard/match-prep/[mid]/page.tsx` |
 
 ### Entry Points (how users reach Plan Team)
 
-1. **Dashboard** (`src/app/dashboard/DashboardContent.tsx`, ~line 193) — "Plan Team" button on active/upcoming matches.
-2. **Tournament match page** (`src/app/tournaments/[id]/matches/[mid]/page.tsx`) — "Plan Team" button linking to `/dashboard/match-prep/{matchId}`.
+1. **Dashboard** (`src/app/(player)/dashboard/DashboardContent.tsx`) — "Plan Team" button on active/upcoming matches.
+2. **Tournament match page** (`src/app/(public)/tournaments/[id]/matches/[mid]/page.tsx`) — "Plan Team" button linking to `/dashboard/match-prep/{matchId}`.
 
 ### AI Integration (Scouting)
 
@@ -207,41 +207,33 @@ The match prep page integrates with the "Professor Linden" AI scouting system.
 
 ## 4. Shared Components
 
-Both systems use the same editing UI. Here's the component tree:
-
-> **Stale (pre-v3):** `TeamEditorCore` and the modal `SetEditor` below no longer exist. Per-slot editing is the inline `v3/workspace/SetWorkspace.tsx` inside `v3/editor/TeamsEditor.tsx`; see `docs/teambuilder-editor.md` for the current tree.
+Both systems mount the same v3 editor — `MatchPrepClient` mounts `TeamsEditor` in `mode="plan"`, `TeambuilderClient` in `mode="teambuilder"`. The editor's full component tree (workspace, intel, ai, validation, hooks) is documented in `docs/teambuilder-editor.md`; `TeamEditorCore` and the modal `SetEditor` were deleted in the v3 rework (see `docs/deprecations.md`).
 
 ```
-TeambuilderClient (save wrapper)          MatchPrepClient (save wrapper)
-        ↓                                         ↓
-   TeamEditorCore  ←──────── shared ────────→  TeamEditorCore
+TeambuilderClient (save → /api/teams)      MatchPrepClient (save → /api/match-prep)
+        ↓                                            ↓
+   v3/editor/TeamsEditor   ←──── shared ────   mode="plan"
         ↓
-  ┌─────┼──────────────┬──────────────┐
-  │     │              │              │
-TeamImporter    TeamDisplay    SetEditor    TypeAnalysisPanel
-(paste/URL)     (6-slot grid)  (modal)      (coverage sidebar)
-                     │              │
-               SetSlot cards   Combobox fields
-               LegalityBadge  StatDisplay
-                               PokemonPicker
+  ┌────────────┬────────────┬──────────────┬──────────────┐
+  workspace/   editor/      validation/    intel/         ai/
+  SetWorkspace state.ts     ValidationPanel IntelPanel    AiPanel
+  + pickers    EditorDialogs PoolsCard      OpponentPanel
+               └→ TeamImporter
 ```
 
 ### Component Details
 
 | Component | File | Role |
 |-----------|------|------|
-| `TeambuilderClient` | `src/components/teambuilder/TeambuilderClient.tsx` | Wraps editor with save to `/api/teams`. Props: tournamentId, rulesetId, initialPokemon, teamId, locked. |
-| `MatchPrepClient` | `src/components/match/MatchPrepClient.tsx` | Wraps editor with save to `/api/match-prep`. Shows opponent name + scouting report. |
-| `TeamEditorCore` | `src/components/teambuilder/TeamEditorCore.tsx` | State machine: pokemon[], editingSlot, viewMode ('editor' / 'teamsheet-full' / 'teamsheet-open'). Handles import, slot editing, validation, view toggling. |
-| `TeamImporter` | `src/components/teambuilder/TeamImporter.tsx` | Two tabs: "Paste Text" and "PokePaste URL". POSTs to `/api/import-team`. |
-| `TeamDisplay` | `src/components/teambuilder/TeamDisplay.tsx` | 6-slot grid (3 cols). Each slot: sprite, species, type badges, item/ability/nature, moves with type badges, compact stat bars. |
-| `SetWorkspace` | `src/components/teambuilder/v3/workspace/SetWorkspace.tsx` | Inline per-slot editor (replaced the deleted modal `SetEditor.tsx`): species header, item/ability/nature/tera pickers, move section, stat editor with spread presets. |
-| `PokemonPicker` | `src/components/teambuilder/PokemonPicker.tsx` | Species search modal with debounce. Fetches `/api/pkmn/search?type=species`. |
-| `StatDisplay` | `src/components/teambuilder/StatDisplay.tsx` | 6 stat bars. Calculates effective stats from base + IV + EV + nature + level. Color-coded nature boosts/reductions. |
-| `LegalityBadge` | `src/components/teambuilder/LegalityBadge.tsx` | Green "Legal" or red/yellow with issue list. Shows team-level + per-set issues. |
-| `TypeAnalysisPanel` | `src/components/teambuilder/TypeAnalysisPanel.tsx` | Sidebar (~320px). Per-Pokémon types, team weaknesses (2+ members weak), resistances. |
-| `TeamsheetView` | `src/components/teambuilder/TeamsheetView.tsx` | Printable grid. Modes: 'full' (all details) or 'open' (items + ability + tera only). |
-| `TeamPicker` | `src/components/teambuilder/TeamPicker.tsx` | Load existing team modal. Searches player's teams by tournament name or species. |
+| `TeambuilderClient` | `src/components/teambuilder/TeambuilderClient.tsx` | Mounts `TeamsEditor` with save to `/api/teams`. Props: tournamentId, rulesetId, initialPokemon, teamId, locked. |
+| `MatchPrepClient` | `src/components/match/MatchPrepClient.tsx` | Mounts `TeamsEditor mode="plan"` with save to `/api/match-prep`, next to the `ScoutingReportCard`. |
+| `TeamsEditor` | `src/components/teambuilder/v3/editor/TeamsEditor.tsx` | The unified editor (teambuilder / plan / library modes); reducer state in `editor/state.ts`, carried by `EditorContext`. |
+| `SetWorkspace` | `src/components/teambuilder/v3/workspace/SetWorkspace.tsx` | Inline per-slot set editor (species header, item/ability/nature/tera pickers, move section, stat editor with spread presets). |
+| `TeamImporter` | `src/components/teambuilder/TeamImporter.tsx` | Import dialog opened by `v3/editor/EditorDialogs.tsx`: "Paste Text" and "PokePaste URL", POSTs to `/api/import-team`. |
+| `TeamDisplay` | `src/components/teambuilder/TeamDisplay.tsx` | Read-only 6-slot team card used by the league teams page (`src/app/(public)/leagues/[id]/teams/[pid]/page.tsx`). |
+| `StatDisplay` | `src/components/teambuilder/StatDisplay.tsx` | 6 stat bars from base + IV + EV + nature + level; currently unmounted (the v3 workspace renders its own stat section). |
+| `LegalityBadge` | `src/components/teambuilder/LegalityBadge.tsx` | "Legal" / issue-list badge rendered by `TeamDisplay`; `ChecksInbox` and `SetWorkspace` reuse its `useValidationIssueText` hook for localised issue texts. |
+| `TeamPicker` | `src/components/teambuilder/TeamPicker.tsx` | Load-an-existing-team modal (used by the solo studio's team panel). |
 
 ---
 
@@ -340,9 +332,9 @@ User → /teambuilder or /teambuilder/[tid]
          ↓
    TeambuilderClient (loads existing team if editing)
          ↓
-   TeamEditorCore
+   TeamsEditor (v3)
      ├─ Import: POST /api/import-team → pokemon[]
-     ├─ Edit slot: SetWorkspace (inline; was the modal SetEditor)
+     ├─ Edit slot: v3/workspace/SetWorkspace (inline)
      │    ├─ Species search: GET /api/pkmn/search?type=species
      │    ├─ Move search:    GET /api/pkmn/search?type=move&species=X (filtered)
      │    ├─ Item search:    GET /api/pkmn/search?type=item
@@ -366,7 +358,7 @@ User → Dashboard "Plan Team" button or Tournament match "Plan Team" link
    Server: loads match, opponent, ruleset, existing prep team, scouting report
          ↓
    MatchPrepClient
-     ├─ TeamEditorCore (same editing flow as Teambuilder)
+     ├─ TeamsEditor mode="plan" (same v3 editor as the teambuilder)
      └─ ScoutingReportCard (AI analysis from Professor Linden)
          ↓
    Save: POST /api/match-prep (upsert)

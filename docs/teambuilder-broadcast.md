@@ -1,71 +1,61 @@
-# Teambuilder Broadcast Module
+# Teambuilder Broadcast
 
 ### Overview
 
-Unified broadcast overlay component family for team display in OBS overlays. Consolidates three previously separate components (`TeamComparison`, `SoloTeamPreview`, `OverlayTeamStrip`) into a single `BroadcastTeam` component with four variants. All variants consume the same `EnrichedPokemonState[]` data shape and use a shared `TeamCardBroadcastPrimitive` for per-Pokémon rendering.
+How broadcast (OBS overlay) surfaces show a team. The overlays are the **legacy `src/components/broadcast/` components** — the migration to a v3 `BroadcastTeam` family under `v3/broadcast/` is **not started** (`src/components/AGENTS.md`, "Teambuilder (v3)"). There is no `BroadcastTeam`, `TeamCardBroadcastPrimitive`, or `variants/` directory; the earlier design note that described them was superseded. A reader needing the shared per-Pokémon card should look at `src/components/teambuilder/v3/primitives/TeamCardPrimitive.tsx`, composed by `TeamDisplay` and `TeamsEditor` (the legacy broadcast components render their own card markup).
 
 ### File Structure
 
-- **Main Entry Point**: `src/components/teambuilder/v3/broadcast/BroadcastTeam.tsx`
-- **Variants**: `src/components/teambuilder/v3/broadcast/variants/`
-
 ```
-src/components/teambuilder/v3/broadcast/
-├── BroadcastTeam.tsx                    Root component with variant router
-├── TeamCardBroadcastPrimitive.tsx       Overlay-styled per-Pokémon card
-└── variants/
-    ├── ComparisonVariant.tsx            Side-by-side 6v6 (replaces TeamComparison)
-    ├── StripVariant.tsx                 Horizontal sprite row (replaces OverlayTeamStrip)
-    ├── TrackerVariant.tsx               Live KO/lead/MVP state (new)
-    └── PreviewVariant.tsx               Solo streamer preview (replaces SoloTeamPreview)
+src/components/broadcast/
+├── overlays/
+│   ├── TeamComparison.tsx    side-by-side 6v6 registered teams (items, abilities, moves)
+│   ├── SoloTeamPreview.tsx   solo cast session's teams, polled live
+│   └── …                   (MatchPreview, MatchStory, etc. — see docs/broadcast.md)
+├── caster/
+│   └── …                  (caster-side panels: CheatSheet, LowerThirdEditor, etc.)
+├── shared/
+│   └── OverlayTeamStrip.tsx  one team's sprite row, embedded by other overlays
+└── tracker/
+    └── TrackerTeamColumn.tsx the battle tracker's per-player team column (brought/KO counts)
 ```
 
 ### Core Functions/Classes
 
-- **`BroadcastTeam`**: Single component, four variants via `variant` prop. Props: `variant`, `source` (`'match'` | `'solo'`), `matchId?`, `sessionId?`, `pokemon?`, `config?`.
-- **`TeamCardBroadcastPrimitive`**: Overlay-styled per-Pokémon card. Two size modes: `compact` (sprite-only row) and `full` (sprite + name + ability + item + moves). Composes on top of the public `TeamCardPrimitive` with broadcast CSS variables applied.
-- **`ComparisonVariant`**: Side-by-side 6v6 overlay. Fetches `/api/broadcast/preview/[mid]`. Animated reveal. Replaces `src/components/broadcast/overlays/TeamComparison.tsx`.
-- **`StripVariant`**: Horizontal sprite row with aura glow (gold=MVP, green=alive, red=KO'd) and dim for benched. Replaces `src/components/broadcast/shared/OverlayTeamStrip.tsx`.
-- **`TrackerVariant`**: Same as Strip but reads live `tracker_state` and re-renders on each broadcast tick with up-to-date KO/lead/MVP states.
-- **`PreviewVariant`**: Solo streamer team preview. Uses `useSoloBroadcastPoll(sessionId)`. Replaces `src/components/broadcast/overlays/SoloTeamPreview.tsx`.
+- **`TeamComparison`** (`overlays/TeamComparison.tsx`) — side-by-side 6v6 overlay. Fetches `GET /api/broadcast/preview/[mid]` once, derives each side's `EnrichedPokemonState[]`, and renders the title and the `OverlayPlayerBadge` player badges inside `AnimatedReveal`s, with the 6v6 `OverlayPokemonSprite` card grid below them. Route: `src/app/(broadcast)/broadcast/match/[mid]/teams/page.tsx`.
+- **`SoloTeamPreview`** (`overlays/SoloTeamPreview.tsx`) — solo streamer's team preview; polls the cast session through `useSoloBroadcastPoll(sessionId)` (`src/lib/broadcast/use-solo-broadcast.ts`). Route: `src/app/(broadcast)/broadcast/solo/[sessionId]/team-preview/page.tsx`.
+- **`OverlayTeamStrip`** (`shared/OverlayTeamStrip.tsx`) — presentational sprite row for one team; embedded by `overlays/MatchPreview.tsx`, `overlays/MatchStory.tsx` and `shared/OverlayMatchCard.tsx`.
+- **`TrackerTeamColumn`** (`tracker/TrackerTeamColumn.tsx`) — one side of the live battle tracker (`tracker/BattleTracker.tsx`): a per-player roster column that reads the tracker's `TrackerPlayerState` and shows the brought-of-six count, KOs dealt, KO'd count and per-slot rows; also mounted by `creator/studio/CastStudio.tsx`.
 
 ### Data Flows
 
-**Match variant (comparison)**:
-1. `BroadcastTeam` fetches `/api/broadcast/preview/[mid]` once.
-2. Derives `player1_team` / `player2_team` from `EnrichedPokemonState[]`.
-3. Renders `ComparisonVariant` with `TeamCardBroadcastPrimitive` for each card.
+**Match team comparison**:
+1. `/broadcast/match/[mid]/teams` mounts `TeamComparison` with the overlay `config`.
+2. The component fetches `/api/broadcast/preview/[mid]` once and keeps `MatchPreviewData` in state.
+3. It derives `player1_team` / `player2_team` and renders both sides.
 
-**Solo variant (preview)**:
-1. `BroadcastTeam` calls `useSoloBroadcastPoll(sessionId)`.
-2. Renders `PreviewVariant` with compact `TeamCardBroadcastPrimitive`.
+**Solo team preview**:
+1. `/broadcast/solo/[sessionId]/team-preview` mounts `SoloTeamPreview`.
+2. `useSoloBroadcastPoll` repolls the cast session (default 5 s) so roster changes reach OBS.
 
-**Tracker variant (strip)**:
-1. Receives `tracker_state` from the live battle tracker.
-2. Derives brought/alive/KO'd/MVP states per Pokémon.
-3. Re-renders `StripVariant` on each broadcast tick.
+**Tracker strip**:
+1. The battle tracker owns `tracker_state`; `TrackerTeamColumn` reads each player's `TrackerPlayerState` (brought / KO'd / KOs-dealt counts and slot rows) and re-renders when the tracker updates.
 
 ### Dependencies
 
-- **External**: `motion` (animations)
-- **Internal**: `src/lib/match/aggregation.ts` (`EnrichedPokemonState`), `src/components/broadcast/shared/OverlayShell.tsx`, `src/hooks/useSoloBroadcastPoll.ts`, `TeamCardPrimitive` from `v3/display/`
+- **Internal**: `src/lib/broadcast/use-solo-broadcast.ts` (polling), `src/types/broadcast.ts` (`EnrichedPokemonState`), the `shared/` overlay primitives (`OverlayShell`, `OverlayPokemonSprite`, `OverlayPlayerBadge`, `OverlayMatchCard`, `AnimatedReveal`), `src/i18n/messages/broadcast-overlays` and the engine-name localiser `translateEngineLabel` (`src/i18n/content/engine-labels.ts`).
+- **Planned (not built)**: a `v3/broadcast/` directory under `src/components/teambuilder/` — the single `BroadcastTeam` component with four variants. `src/components/AGENTS.md` records this as a not-yet-migrated state; do not code against it.
 
 ### API Routes
 
-- `GET /api/broadcast/preview/[mid]` — public, returns match preview data with `player1_team` / `player2_team` as `EnrichedPokemonState[]`.
-- Solo data polled via `useSoloBroadcastPoll`.
+- `GET /api/broadcast/preview/[mid]` — public overlay read; returns the match preview with both teams as `EnrichedPokemonState[]`.
+- Solo session data is polled through `useSoloBroadcastPoll`, not a dedicated team route.
 
 ### Testing
 
-- **BroadcastTeam variants**: `src/components/teambuilder/v3/broadcast/__tests__/BroadcastTeam.test.tsx` — comparison renders side-by-side, strip renders horizontal row, tracker re-renders on `frame_index` change, preview uses `useSoloBroadcastPoll`.
+- `src/components/broadcast/overlays/__tests__/`, `src/components/broadcast/shared/__tests__/` and `src/components/broadcast/tracker/__tests__/` cover the overlays' i18n, the draft overlays, and the tracker session; see [Broadcast](./broadcast.md) for the wider module's tests.
 
 ### Related Modules
 
-- Teambuilder Editor Module - `TeamCardPrimitive` is the shared base
-- Broadcast Module (`src/lib/broadcast/`) - tracker reducer, overlay config, recap engine
-- Match Module - `MatchHighlightCard` also uses `TeamCardPrimitive`
-
-### Notes
-
-- The three replaced components (`TeamComparison.tsx`, `SoloTeamPreview.tsx`, `OverlayTeamStrip.tsx`) were deleted. A re-export `BroadcastTeamStrip` is provided for call sites that imported `OverlayTeamStrip` directly — allows a one-line import path swap.
-- Broadcast CSS variables (color, typography) are injected by `OverlayShell.tsx` and inherited by `TeamCardBroadcastPrimitive` via `data-broadcast-skin`.
+- [Broadcast](./broadcast.md) — overlay config, the tracker reducer, the recap engine and the `(broadcast)` route group.
+- [Teambuilder Editor](./teambuilder-editor.md) — the v3 editor; `TeamCardPrimitive` is the shared card a future `v3/broadcast/` family would build on.

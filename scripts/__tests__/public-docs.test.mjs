@@ -428,8 +428,6 @@ export const DEAD_PATH_EXEMPT = [
   { match: (f) => f.startsWith('docs/archive/'), reason: 'archived records describe the tree as it was' },
   { match: (f) => f.startsWith('docs/superpowers/'), reason: 'dated plans and specs describe the tree as it was' },
   { match: (f) => f === 'docs/deprecations.md', reason: 'its job is to name files that were deleted' },
-  { match: (f) => f === 'docs/teambuilder-reference.md', reason: 'describes the removed /teambuilder route; rewrite tracked separately' },
-  { match: (f) => f === 'docs/teambuilder-broadcast.md', reason: 'describes the removed /teambuilder route; rewrite tracked separately' },
 ];
 
 /** Backticked repo paths of a markdown text with their 1-based line numbers (issue #147: `src/` used to be the only scanned root). */
@@ -571,7 +569,7 @@ describe('docs cite source paths that exist', () => {
 
   it('keeps every exemption reasoned', () => {
     expect(DEAD_PATH_EXEMPT.map((e) => e.reason).every((r) => r.length > 10)).toBe(true);
-    expect(DEAD_PATH_EXEMPT).toHaveLength(5);
+    expect(DEAD_PATH_EXEMPT).toHaveLength(3);
   });
 });
 
