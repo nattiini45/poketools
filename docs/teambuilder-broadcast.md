@@ -2,7 +2,7 @@
 
 ### Overview
 
-How broadcast (OBS overlay) surfaces show a team. The overlays are the **legacy `src/components/broadcast/` components** — the migration to a v3 `BroadcastTeam` family under `v3/broadcast/` is **not started** (`src/components/AGENTS.md`, "Teambuilder (v3)"). There is no `BroadcastTeam`, `TeamCardBroadcastPrimitive`, or `variants/` directory; the earlier design note that described them was superseded. A reader needing the shared per-Pokémon card should look at `src/components/teambuilder/v3/primitives/TeamCardPrimitive.tsx`, which the match highlight card and the overlays compose.
+How broadcast (OBS overlay) surfaces show a team. The overlays are the **legacy `src/components/broadcast/` components** — the migration to a v3 `BroadcastTeam` family under `v3/broadcast/` is **not started** (`src/components/AGENTS.md`, "Teambuilder (v3)"). There is no `BroadcastTeam`, `TeamCardBroadcastPrimitive`, or `variants/` directory; the earlier design note that described them was superseded. A reader needing the shared per-Pokémon card should look at `src/components/teambuilder/v3/primitives/TeamCardPrimitive.tsx`, composed by `TeamDisplay` and `TeamsEditor` (the legacy broadcast components render their own card markup).
 
 ### File Structure
 
@@ -41,7 +41,7 @@ src/components/broadcast/
 
 ### Dependencies
 
-- **Internal**: `src/lib/broadcast/use-solo-broadcast.ts` (polling), `src/lib/match/aggregation.ts` (`EnrichedPokemonState`), the `shared/` overlay primitives (`OverlayShell`, `OverlayPokemonSprite`, `OverlayPlayerBadge`, `OverlayMatchCard`, `AnimatedReveal`), `src/i18n/messages/broadcast-overlays` and the engine-name localisers of `src/lib/pkmn/i18n`.
+- **Internal**: `src/lib/broadcast/use-solo-broadcast.ts` (polling), `src/types/broadcast.ts` (`EnrichedPokemonState`), the `shared/` overlay primitives (`OverlayShell`, `OverlayPokemonSprite`, `OverlayPlayerBadge`, `OverlayMatchCard`, `AnimatedReveal`), `src/i18n/messages/broadcast-overlays` and the engine-name localisers of `src/lib/pkmn/i18n`.
 - **Planned (not built)**: a `v3/broadcast/` directory under `src/components/teambuilder/` — the single `BroadcastTeam` component with four variants. `src/components/AGENTS.md` records this as a not-yet-migrated state; do not code against it.
 
 ### API Routes

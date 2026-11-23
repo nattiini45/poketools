@@ -230,9 +230,9 @@ TeambuilderClient (save → /api/teams)      MatchPrepClient (save → /api/matc
 | `TeamsEditor` | `src/components/teambuilder/v3/editor/TeamsEditor.tsx` | The unified editor (teambuilder / plan / library modes); reducer state in `editor/state.ts`, carried by `EditorContext`. |
 | `SetWorkspace` | `src/components/teambuilder/v3/workspace/SetWorkspace.tsx` | Inline per-slot set editor (species header, item/ability/nature/tera pickers, move section, stat editor with spread presets). |
 | `TeamImporter` | `src/components/teambuilder/TeamImporter.tsx` | Import dialog opened by `v3/editor/EditorDialogs.tsx`: "Paste Text" and "PokePaste URL", POSTs to `/api/import-team`. |
-| `TeamDisplay` | `src/components/teambuilder/TeamDisplay.tsx` | Read-only 6-slot team card used by the league teams page (`src/app/(public)/leagues/[id]/teams/[pid]/page.tsx`) and the solo studio panel. |
+| `TeamDisplay` | `src/components/teambuilder/TeamDisplay.tsx` | Read-only 6-slot team card used by the league teams page (`src/app/(public)/leagues/[id]/teams/[pid]/page.tsx`). |
 | `StatDisplay` | `src/components/teambuilder/StatDisplay.tsx` | 6 stat bars from base + IV + EV + nature + level. |
-| `LegalityBadge` | `src/components/teambuilder/LegalityBadge.tsx` | "Legal" / issue-list badge shown on `TeamDisplay` and the runtime `ChecksInbox`. |
+| `LegalityBadge` | `src/components/teambuilder/LegalityBadge.tsx` | "Legal" / issue-list badge rendered by `TeamDisplay`; `ChecksInbox` and `SetWorkspace` reuse its `useValidationIssueText` hook for localised issue texts. |
 | `TeamPicker` | `src/components/teambuilder/TeamPicker.tsx` | Load-an-existing-team modal (used by the solo studio's team panel). |
 
 ---
