@@ -216,6 +216,13 @@ are service-role-only.
 - [Auth Module](./auth.md) — `requirePlayer()` for note submission, `requireAdmin()` for approval
 - [Broadcast Module](./broadcast.md) — OverlayShell for wiki overlays, url-builder registry
 
+
+## Testing
+
+- **Test Files — `src/lib/wiki/`**: `src/lib/wiki/__tests__/` (7 test files): `index-rows.test.ts`, `moderation.test.ts`, `native-phase-services.test.ts`, `note-moderation-state.test.ts`, `phase-persistence.test.ts`, `phase-services.test.ts`, `phase-wiki.local.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).
+
 ## Related Modules
 - [Broadcast Module](./broadcast.md) — wiki overlay types in url-builder
 - [Creator Hub Module](./creator-hub.md) — parent routing

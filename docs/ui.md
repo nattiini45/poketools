@@ -57,6 +57,8 @@ const table = useClientTable(
 ```
 
 ## Testing
+
+- **Test Files — `src/lib/ui/`**: `src/lib/ui/__tests__/` (3 test files): `submit-phase-state.test.ts`, `table-params.test.ts`, `use-client-table.test.ts`.
 - **Test Files**: `src/lib/ui/__tests__/table-params.test.ts` — `parseTableParams` defaults/clamping, `cycleColumnSort` 3-state cycle, `parseSortParam`/`buildSortParam`, `nextSortParam` server-link parity, `compareSortValues` nullish/NaN ordering, `paginateArray`, `totalTablePages`; `src/lib/ui/__tests__/use-client-table.test.ts` — the hook's sort-then-paginate composition over the pure helpers (no renderer)
 - **Testing Approach**: Unit tests for both files; feature tables (`src/components/ui/Table.tsx`, wiki and replay lists) cover the wiring
 

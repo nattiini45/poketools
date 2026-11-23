@@ -89,6 +89,8 @@ The emitter verifies `owner.season_id` against the phase, calls `resolvePhaseSoc
 Mocked native tests cover ownership, recipient filters, exact encrypted-byte handoff, language, image/options, provider limits, failure isolation and legacy formatting parity. No real provider, model, Storage or database request is made.
 
 ## Testing
+
+- **Test Files — `src/lib/social/`**: `src/lib/social/__tests__/` (7 test files): `bluesky-host.test.ts`, `crypto.test.ts`, `format.test.ts`, `image-fetch.test.ts`, `notify.test.ts`, `phase-notify.test.ts`, `validation.test.ts`.
 - **Test Files**:
   - `src/app/api/social-integrations/__tests__/route.test.ts`
   - `src/app/api/social-integrations/[id]/__tests__/route.test.ts`

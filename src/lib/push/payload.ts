@@ -1,5 +1,5 @@
 /**
- * The notification text a push carries (docs/push.md, "Payload"). Server only: it is built here, in the
+ * The notification text a push carries (docs/push.md, "What is sent, and when"). Server only: it is built here, in the
  * language stored with the subscription (`push_subscriptions.locale`), so the service worker only shows it.
  *
  * The payload is small JSON `{ kind, title, body, url, tag }`: league name, a duration and a same-origin path.

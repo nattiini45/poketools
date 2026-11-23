@@ -287,6 +287,8 @@ const team = aggregateTeamFromStats(statsByGame, playerId, true);
 ```
 
 ## Testing
+
+- **Test Files — `src/lib/match/`**: `src/lib/match/__tests__/` (28 test files): `aggregate-job-state.test.ts`, `aggregate-queue-stats.test.ts`, `aggregate-queue.test.ts`, `aggregate-rebuild.test.ts`, `aggregation.test.ts`, `auto-confirm-storage.test.ts`, `bulk-actions.test.ts`, `epb-matchday-hooks.test.ts`, `epb-matchday.test.ts`, `epb-stage-resolution.test.ts`, `epb-tracker-apply.test.ts`, `evolution-match-evaluator.test.ts`, `finalization-core.test.ts`, `finalize.test.ts`, `game-marker-state.test.ts`, `match-actions.test.ts`, `match-children.test.ts`, `outcome-state-sql.test.ts`, `outcome-takeback.test.ts`, `process-aggregates.test.ts`, `proposal-state.test.ts`, `public-match.test.ts`, `reopen.test.ts`, `series-tally.test.ts`, `snapshot-lines.test.ts`, `social-image-path.test.ts`, `stage-ended-warning.test.ts`, `stage-ended.test.ts`.
 - **Test Files**: `src/lib/match/__tests__/`. The public shape: `public-match.test.ts`, with the sentinel helper `private-match-fields.ts` (`fullMatchRow`, `expectNoPrivateMatchData`) that the public route, read-cache and world-payload tests use. The database grants: `src/lib/supabase/__tests__/api-role-grants.local.test.ts` (LIVE-LOCAL, opt-in with `LOCAL_SUPABASE_GRANTS=1`) and `src/lib/supabase/__tests__/migration-api-grants.test.ts` (static, in CI). The live post-checks (2026-10-08) are in the status header of `docs/security/anon-match-columns.md`.
 - **Testing Approach**: unit tests with mocked Supabase, plus API/integration verification
 

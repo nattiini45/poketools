@@ -32,6 +32,7 @@ src/lib/format-kit/
 │                      shared with the Ruleset Studio, and is not re-exported by the kit barrels
 ├── types.ts           the document types (hand-written, zod-free)
 ├── issues.ts          SchemaIssue, SchemaNote, ValidationResult, mapZodIssues, finalizeIssues
+├── scoring.ts         a stage's scoring the way the engine applies it (forfeit and no-show points)
 ├── expr/              the expression language
 │   ├── ast.ts limits.ts measure.ts lexer.ts parser.ts printer.ts normalize.ts
 │   ├── typecheck.ts eval.ts rand.ts
@@ -747,3 +748,8 @@ Legality is expressed with `when` on `round`, never with the unlock flag of a do
 - A bundle-size budget for the Studio client closure. Both languages of the kit catalogs ship on the admin routes that render the rules text; the routes are admin-only and route-split.
 - Surfaces not built: an admin acting for a player (an `actor_id` is a 400), a first-class void of an accepted challenge (an admin removes the match with the match routes), notifications outside the site (the inbox is in-app only; no push, Discord or email carries them yet), an admin UI for `rank`, `domain` and link-editing adjustments (API only), a holdings read for admins (a revoke lists the whole domain and the server refuses an impossible one; a refusal is neither stored nor audited, so a rostered admin who also plays can learn that a player does not hold an own-visibility item, an open decision), a per-match attempt counter in the finalize heal (the heal handles 25 matches per run, oldest first), a snapshot of the registered team at replay submission (so a same-species edit of items, Tera or moves is only visible as evidence), and a compile warning for a `player.action` step that names an `admins` domain (a player can never pick from it; a submission against it answers `domain_locked`).
 - German copy of the engine, player and admin surfaces is new and has had no native review.
+## Testing
+
+- **Test Files — `src/lib/format-kit/`**: `src/lib/format-kit/__tests__/` (26 test files): `bipartite-rounds.test.ts`, `capabilities.test.ts`, `checks-privacy.test.ts`, `client-boundary.test.ts`, `compile.test.ts`, `describe-definition.test.ts`, `describe.test.ts`, `diagnostics.test.ts`, `fixes.test.ts`, `gift-exchange.test.ts`, `graph.test.ts`, `limits.test.ts`, `ltext.test.ts`, `memo.test.ts`, `plan.test.ts`, `preset-parity.test.ts`, `presets.test.ts`, `registry.test.ts`, `render.test.ts`, `ruleset-presets.test.ts`, `schedule.test.ts`, `schema.test.ts`, `source-safety.test.ts`, `validate-parity.test.ts`, `validate-spec.test.ts`, `wichtelcup-preset.server.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).

@@ -721,6 +721,13 @@ src/components/world/
     `point-buy-lists`, `format-rules`, `evolutions`, `drafts`,
     `league-standings`, `tournament-reports`)
 
+
+## Testing
+
+- **Test Files — `src/lib/worlds/`**: `src/lib/worlds/__tests__/` (6 test files): `registry-custom.test.ts`, `registry-nav-labels.test.ts`, `registry-viewer.test.ts`, `route-data-golden.test.ts`, `route-data.test.ts`, `route-theme-options.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).
+
 ## Related Modules
 
 - [Public Site](./public-site.md) — the `(public)` routes the worlds render in.
