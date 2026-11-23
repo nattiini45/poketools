@@ -70,6 +70,7 @@ export default {
     submit: 'Create Tournament',
     saveChanges: 'Save changes',
     saved: 'Tournament settings saved.',
+    retrySync: 'Retry bracket sync',
     lockedStarted: 'Locked: the tournament has started.',
     lockedRounds: 'Locked: rounds have been generated.',
     saveFailed: 'Failed to save',

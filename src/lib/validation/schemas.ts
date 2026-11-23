@@ -331,6 +331,10 @@ export const tournamentUpdateSchema = z.object({
   stage_order: z.number().int().min(0).optional(),
   bracket_reset_enabled: z.boolean().optional(),
   third_place_enabled: z.boolean().optional(),
+  // Explicit retries of the bracket syncs after a logged *_sync_failed warning (issue #152): the settings
+  // editor resends every field on save, so a retry is never implied by resending the setting itself.
+  bracket_reset_sync_retry: z.boolean().optional(),
+  third_place_sync_retry: z.boolean().optional(),
 });
 
 const advancementRuleSchema = z.object({

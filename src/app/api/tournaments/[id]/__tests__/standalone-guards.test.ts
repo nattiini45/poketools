@@ -356,4 +356,26 @@ describe('PATCH /api/tournaments/[id]: third-place toggle', () => {
       expect.objectContaining({ metadata: { third_place_sync: null, third_place_sync_error: 'third_place_sync_failed' } }),
     );
   });
+
+  it('warns in the response when the sync throws, so the admin knows to retry', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(single as never);
+    vi.mocked(getParticipants).mockResolvedValue([]);
+    vi.mocked(syncThirdPlaceSetting).mockRejectedValue(new Error('boom'));
+
+    const response = await patch({ third_place_enabled: true });
+
+    expect((await response.json()).warnings).toEqual([{ code: 'third_place_sync_failed' }]);
+  });
+
+  it('re-runs the sync on the explicit retry flag without the setting changing (issue #152)', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ ...single, third_place_enabled: true } as never);
+    vi.mocked(getParticipants).mockResolvedValue([]);
+    vi.mocked(syncThirdPlaceSetting).mockResolvedValue({ third_place_matches_removed: 0, slots_materialized: 1 });
+
+    const response = await patch({ third_place_enabled: true, third_place_sync_retry: true });
+
+    expect(response.status).toBe(200);
+    expect(syncThirdPlaceSetting).toHaveBeenCalledWith(expect.objectContaining({ third_place_enabled: true }), []);
+    expect((await response.json()).warnings).toBeUndefined();
+  });
 });
