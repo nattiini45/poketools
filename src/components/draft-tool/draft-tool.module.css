@@ -127,8 +127,9 @@
   color: var(--draft-ink);
 }
 
+/* The room has no fill of its own: the page's world ground flows through, so the room reads as one
+   fluid background instead of a cutout card on the page. Only the card wall stays its own pane. */
 .root {
-  background: var(--draft-surface);
   position: relative;
 }
 
@@ -204,9 +205,6 @@
 .extras,
 .wallPane {
   padding: clamp(0.5rem, 1.2cqi, 1rem);
-  border: 1px solid var(--draft-border);
-  border-radius: 0.75rem;
-  background: var(--draft-surface);
   min-inline-size: 0;
 }
 
@@ -218,6 +216,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  border: 1px solid var(--draft-border);
+  border-radius: 0.75rem;
   background: var(--draft-wall);
   isolation: isolate;
 }
@@ -274,9 +274,6 @@
     position: relative;
     top: auto;
     min-block-size: 0;
-    border: 1px solid var(--draft-border);
-    border-radius: 0.75rem;
-    background: var(--draft-surface);
   }
   .stageScroll {
     min-block-size: 0;
