@@ -33,6 +33,10 @@
   --draft-accent-fill: var(--poke-accent);
   --draft-glow: var(--world-glow, var(--poke-glow));
   --draft-wall: color-mix(in srgb, var(--hud-glass, var(--draft-elevated)) 30%, var(--draft-surface));
+  /* The page's world ground, which the room's panes let flow through. Sticky masks (the DRAFT
+     dock, the phone bottom bar) paint it so scrolled content hides without the mask reading as
+     a card of its own on the page. */
+  --draft-ground: var(--world-ground, var(--poke-base));
   /* The honeycomb keeps a share of the surface ink so its lines stay readable under the pale worlds
      (clouds, mountain), where the bare glass border would vanish against the ground. */
   --draft-hex-line: color-mix(in srgb, var(--hud-glass-border, var(--draft-border)) 62%, var(--draft-ink) 20%);
@@ -693,14 +697,15 @@
   z-index: 2;
   order: 3;
   padding-top: 9px;
-  background: linear-gradient(to top, var(--draft-surface) 70%, transparent);
+  background: linear-gradient(to top, var(--draft-ground) 70%, transparent);
 }
 
 @media (min-width: 1024px) {
   .ctaDock {
     top: 0;
     padding-bottom: 4.5px;
-    background: var(--draft-surface);
+    /* Same ground the panes let flow through: hides scrolled content without a card of its own. */
+    background: var(--draft-ground);
   }
 }
 
@@ -1260,7 +1265,7 @@
     flex-direction: column;
     gap: 4.5px;
     padding: 9px 0 max(9px, env(safe-area-inset-bottom));
-    background: linear-gradient(to top, var(--draft-surface) 80%, transparent);
+    background: linear-gradient(to top, var(--draft-ground) 80%, transparent);
   }
   .bottomBar .cta {
     min-height: 48px;
