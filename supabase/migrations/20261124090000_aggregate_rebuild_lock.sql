@@ -179,12 +179,16 @@ BEGIN
   IF p_ttl_seconds IS NULL OR p_ttl_seconds <= 0 THEN
     RAISE EXCEPTION 'p_ttl_seconds must be a positive integer' USING ERRCODE = '22023';
   END IF;
+  -- FOR UPDATE serializes with claims, and the expiry check is part of the match: a heartbeat that arrives
+  -- after the TTL lapsed must NOT revive the lease — writers already passed the fence in the gap, so the
+  -- holder's rebuild is lost and must restart (a new claim) rather than continue over them.
+  PERFORM 1 FROM public.aggregate_rebuild_lock WHERE id = 1 FOR UPDATE;
   UPDATE public.aggregate_rebuild_lock
      SET heartbeat_at = clock_timestamp(),
          expires_at = clock_timestamp() + make_interval(secs => p_ttl_seconds)
-   WHERE id = 1 AND holder = p_holder;
+   WHERE id = 1 AND holder = p_holder AND expires_at > clock_timestamp();
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'aggregate rebuild lock is not held by % (released or stolen)', p_holder
+    RAISE EXCEPTION 'aggregate rebuild lock is not held by % (released, stolen, or expired)', p_holder
       USING ERRCODE = 'PT409';
   END IF;
 END;
@@ -192,7 +196,8 @@ $$;
 
 COMMENT ON FUNCTION public.heartbeat_aggregate_rebuild_lock(uuid, integer) IS
   'CAS-427: extend the rebuild lock while its holder keeps working (one call per recount page). Raises PT409
-   when the holder lost the lock. Service-role only.';
+   when the holder lost the lock — including a heartbeat that lands after expiry, which would revive a
+   lease over writes admitted during the gap. Service-role only.';
 
 CREATE OR REPLACE FUNCTION public.release_aggregate_rebuild_lock(p_holder uuid) RETURNS void
 LANGUAGE plpgsql
