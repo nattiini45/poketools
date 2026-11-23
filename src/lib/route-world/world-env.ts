@@ -82,6 +82,16 @@ export function hdriFileFor(manifest: WorldManifest, role: HdriRole, format: Hdr
 }
 
 /**
+ * `hdriFileFor` only when the manifest actually ships the resolved file, else `null`: the radiance fallback exists so a
+ * bucket published before the gain maps still lights, but a manifest without either encoding (an empty local mirror)
+ * must not send the renderer after a file it cannot have — mounting `Environment` on it throws out of Suspense.
+ */
+export function hdriFileIfPresent(manifest: WorldManifest, role: HdriRole, format: HdriFormat = 'radiance'): string | null {
+  const file = hdriFileFor(manifest, role, format);
+  return manifestFiles(manifest).has(file) ? file : null;
+}
+
+/**
  * The plaza's HDRI encoding (LOOK-PLAN §2 A.1): the gain map. This is the
  * value the plaza theme opts in with; every other world keeps `'radiance'`.
  * `hdriUrlFor(m, role, 'radiance')` is string-identical to `hdriUrl(role)`,

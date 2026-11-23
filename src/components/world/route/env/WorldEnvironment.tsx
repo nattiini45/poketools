@@ -7,8 +7,8 @@ import { HDRJPGLoader } from '@monogrid/gainmap-js';
 import * as THREE from 'three';
 import { useWorldState } from '../WorldStateProvider';
 import { registerWarmPostPass } from '../useStationWarmup';
-import { useWorldManifest } from '@/lib/route-world/model-manifest';
-import { DEFAULT_HDRI_YAW, hdriFileFor, hdriRoleFor, hdriUrlFor, type HdriRole } from '@/lib/route-world/world-env';
+import { useWorldManifest, worldAssetUrl } from '@/lib/route-world/model-manifest';
+import { DEFAULT_HDRI_YAW, hdriFileIfPresent, hdriRoleFor, type HdriRole } from '@/lib/route-world/world-env';
 
 /** The engine's historical IBL pair — every theme without `environmentIntensity` keeps it. */
 const DEFAULT_ENVIRONMENT_INTENSITY: Record<HdriRole, number> = { gold: 0.72, night: 0.55 };
@@ -186,9 +186,13 @@ export default function WorldEnvironment() {
   // Sakura, mountain and clouds declare no `hdriFormat`: the radiance URL is
   // string-identical to the historical `hdriUrl(role)`.
   const format = theme?.hdriFormat ?? 'radiance';
-  const file = hdriFileFor(manifest, role, format);
-  const url = hdriUrlFor(manifest, role, format);
-  const gainmap = file.endsWith('.jpg');
+  const file = hdriFileIfPresent(manifest, role, format);
+  const gainmap = file?.endsWith('.jpg') ?? false;
+
+  // No shipped HDRI for this light (e.g. an empty local asset mirror): keep the
+  // hemisphere-lit scene instead of letting `Environment` throw out of Suspense.
+  if (file === null) return <PmremRefresh />;
+  const url = worldAssetUrl(file);
 
   return (
     <>
