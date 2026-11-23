@@ -3,6 +3,13 @@ import type { BattleStat } from '@/types/game';
 
 vi.mock('@/lib/supabase/queries/aggregates', () => ({ clearAggregatesForScope: vi.fn(), updateAggregatesForScope: vi.fn() }));
 vi.mock('@/lib/supabase/queries/games', () => ({ getBattleStatsByGame: vi.fn(), getNewestGameCreatedAt: vi.fn(), listGamesForAggregateRebuild: vi.fn() }));
+vi.mock('@/lib/supabase/queries/aggregate-rebuild-lock', () => ({
+  assertNoAggregateRebuild: vi.fn(async () => undefined),
+  isAggregateRebuildActive: vi.fn(async () => false),
+  claimAggregateRebuildLock: vi.fn(async () => '00000000-0000-0000-0000-000000000001'),
+  heartbeatAggregateRebuildLock: vi.fn(async () => undefined),
+  releaseAggregateRebuildLock: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/supabase/queries/phase-games', () => ({ getPhaseBattleStatsByGame: vi.fn() }));
 vi.mock('@/lib/match/aggregate-queue', () => ({
   getAggregateJobStats: vi.fn(), processAggregateJobs: vi.fn(), listGameIdsWithLiveIncrementJobs: vi.fn(),
