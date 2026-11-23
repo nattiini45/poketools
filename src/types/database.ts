@@ -812,6 +812,36 @@ export type Database = {
           },
         ]
       }
+      aggregate_rebuild_lock: {
+        Row: {
+          acquired_at: string | null
+          expires_at: string | null
+          heartbeat_at: string | null
+          holder: string | null
+          id: number
+          scope_id: string | null
+          scope_type: string | null
+        }
+        Insert: {
+          acquired_at?: string | null
+          expires_at?: string | null
+          heartbeat_at?: string | null
+          holder?: string | null
+          id?: number
+          scope_id?: string | null
+          scope_type?: string | null
+        }
+        Update: {
+          acquired_at?: string | null
+          expires_at?: string | null
+          heartbeat_at?: string | null
+          holder?: string | null
+          id?: number
+          scope_id?: string | null
+          scope_type?: string | null
+        }
+        Relationships: []
+      }
       aggregate_jobs: {
         Row: {
           attempts: number
@@ -8608,6 +8638,20 @@ export type Database = {
           stale_processing: number
           stranded_pending: number
         }[]
+      }
+      aggregate_rebuild_active: { Args: never; Returns: boolean }
+      assert_no_aggregate_rebuild: { Args: never; Returns: undefined }
+      claim_aggregate_rebuild_lock: {
+        Args: { p_scope_id: string; p_scope_type: string; p_ttl_seconds?: number }
+        Returns: string
+      }
+      heartbeat_aggregate_rebuild_lock: {
+        Args: { p_holder: string; p_ttl_seconds?: number }
+        Returns: undefined
+      }
+      release_aggregate_rebuild_lock: {
+        Args: { p_holder: string }
+        Returns: undefined
       }
       apply_aggregate_job: {
         Args: {

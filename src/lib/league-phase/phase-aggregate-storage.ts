@@ -15,6 +15,10 @@ import {
   type AggregateJobStats,
 } from '@/lib/match/aggregate-queue';
 import { phaseAggregateJobMachine } from './phase-aggregate-job-state';
+import {
+  AggregateRebuildInProgressError,
+  isAggregateRebuildFence,
+} from '@/lib/supabase/queries/aggregate-rebuild-lock';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { isLiveIncrementJob } from '@/lib/supabase/queries/games';
 import type { CompetitionOwner } from '@/types/competition-owner';
@@ -48,7 +52,10 @@ export async function applyPhaseAggregateJob(jobId: string, gameId: string, delt
     p_aggregate_deltas: deltas.aggregateDeltas as unknown as Json,
     p_player_deltas: deltas.playerDeltas as unknown as Json,
   });
-  if (error) throw error;
+  if (error) {
+    if (isAggregateRebuildFence(error)) throw new AggregateRebuildInProgressError(error);
+    throw error;
+  }
   switch (data) {
     case 'applied': case 'already_applied': case 'game_missing': case 'job_not_processing': return data;
     default: throw new Error(`apply_phase_aggregate_job returned an unknown outcome: ${JSON.stringify(data)}`);
@@ -67,7 +74,10 @@ export async function rollbackPhaseGameAggregates(gameId: string, expectedApplie
     p_aggregate_deltas: deltas.aggregateDeltas as unknown as Json,
     p_player_deltas: deltas.playerDeltas as unknown as Json,
   });
-  if (error) throw error;
+  if (error) {
+    if (isAggregateRebuildFence(error)) throw new AggregateRebuildInProgressError(error);
+    throw error;
+  }
   switch (data) {
     case 'rolled_back': case 'not_applied': case 'marker_changed': case 'game_missing': return data;
     default: throw new Error(`rollback_phase_game_aggregates returned an unknown outcome: ${JSON.stringify(data)}`);

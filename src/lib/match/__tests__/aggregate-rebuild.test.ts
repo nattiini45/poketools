@@ -22,6 +22,17 @@ vi.mock('@/lib/revalidation', () => ({
   revalidatePublicPath: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/aggregate-rebuild-lock', () => ({
+  claimAggregateRebuildLock: vi.fn(async () => 'holder-1'),
+  heartbeatAggregateRebuildLock: vi.fn(async () => {}),
+  releaseAggregateRebuildLock: vi.fn(async () => {}),
+  isAggregateRebuildActive: vi.fn(async () => false),
+  isAggregateRebuildFence: vi.fn((e: unknown) => (e as { code?: unknown }).code === 'PT409'),
+  AggregateRebuildInProgressError: class AggregateRebuildInProgressError extends Error {
+    constructor() { super('rebuild in progress'); }
+  },
+}));
+
 import { drainPendingAggregateJobs, rebuildAggregatesForScope } from '../aggregate-rebuild';
 import {
   clearAggregatesForScope,

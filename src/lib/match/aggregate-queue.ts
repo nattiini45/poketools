@@ -29,6 +29,7 @@
  */
 
 import { supabase } from '@/lib/supabase/client';
+import { isAggregateRebuildFence } from '@/lib/supabase/queries/aggregate-rebuild-lock';
 import {
   applyAggregateJob,
   buildGameAggregateDeltas,
@@ -232,6 +233,11 @@ export async function runAggregateQueue<Job extends { id: string }>(limit: numbe
   const { data: claimedJobs, error: claimError } = await storage.claim(limit);
 
   if (claimError) {
+    // CAS-427: the claim RPC raises PT409 while a scope rebuild holds the
+    // lock — nothing is claimable, so the run defers wholesale to after the
+    // release instead of failing. Jobs claimed earlier can still fence their
+    // apply and are retried through the normal failed -> pending path.
+    if (isAggregateRebuildFence(claimError)) return result;
     console.error('[aggregate-queue] Claim error:', claimError);
     throw new AggregateQueueClaimError({ cause: claimError });
   }

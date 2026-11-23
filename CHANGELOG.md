@@ -12,6 +12,13 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Upgrade notes
 
+- **Apply `20261124090000_aggregate_rebuild_lock.sql` BEFORE deploying the code.** It adds the `aggregate_rebuild_lock`
+  table and the rebuild-lock RPCs, and renames `claim_aggregate_jobs`, `claim_phase_aggregate_jobs`, `apply_aggregate_job`,
+  `apply_phase_aggregate_job`, `rollback_game_aggregates` and `rollback_phase_game_aggregates` to `*_inner` behind
+  same-signature wrappers fenced by the lock. Until it is applied, result writes (`recordGameResult`, `editGame`,
+  `deleteGame`) and admin aggregate rebuilds fail on the missing `assert_no_aggregate_rebuild` / `claim_*_rebuild_lock`
+  functions; the queue's apply/rollback RPCs keep working until the rename lands.
+
 - **Native match/game workflows remain dormant.** The nine `2026111712*` migrations add phase-owned result writers and explicit mixed maintenance/projection adapters. Existing routes and cron stay legacy-bound and deploy without these files. Applying SQL or deploying this layer does not authorize activation or a production data move.
 
 - **Phase lifecycle persistence remains dormant.** The two `2026111711*` migrations add native phase lifecycle and format materialisation RPCs behind explicit adapters. Existing traffic still uses the legacy store and can deploy without these two files. Neither applying them nor deploying this layer authorizes enabling phase mode or moving production data; later match, ancillary and canonical-route layers must be ready first.
@@ -202,6 +209,12 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   says that the string cannot carry level rules, team constraints or per-player pools.
 
 ### Changed
+
+- **Aggregate rebuilds now fence result writes (CAS-427).** `rebuildAggregatesForScope` and `rebuildMixedAggregatesForScope`
+  run under the singleton `aggregate_rebuild_lock` row (120 s TTL, heartbeated per page). While a rebuild holds it, the
+  queue's claim/apply/rollback RPCs on both stores refuse with PT409 (mapped to 409 `aggregate_rebuild_in_progress`),
+  and `recordGameResult`/`editGame`/`deleteGame` refuse before their first write. The quiescent-write precondition on
+  scope rebuilds is enforced instead of documented.
 
 - **The draft room adapts to its available width at the normal 16 px site root.** The selected evolution portrait
   stays open on phones, the clock and cards use less space there, and the two-pane layout gives the Pokémon wall
