@@ -32,8 +32,10 @@
   /* Fill under text: the site accent, which meets AA against the surface ink; the world accent stays on lines and dots. */
   --draft-accent-fill: var(--poke-accent);
   --draft-glow: var(--world-glow, var(--poke-glow));
-  --draft-wall: color-mix(in srgb, var(--hud-glass, var(--draft-elevated)) 18%, var(--draft-surface));
-  --draft-hex-line: color-mix(in srgb, var(--hud-glass-border, var(--draft-border)) 55%, transparent);
+  --draft-wall: color-mix(in srgb, var(--hud-glass, var(--draft-elevated)) 30%, var(--draft-surface));
+  /* The honeycomb keeps a share of the surface ink so its lines stay readable under the pale worlds
+     (clouds, mountain), where the bare glass border would vanish against the ground. */
+  --draft-hex-line: color-mix(in srgb, var(--hud-glass-border, var(--draft-border)) 62%, var(--draft-ink) 20%);
   --draft-glass: color-mix(in srgb, var(--draft-surface) 82%, transparent);
   --draft-dots: color-mix(in srgb, var(--draft-accent) 20%, transparent);
   --draft-taken-bg: var(--poke-danger-light);
@@ -125,8 +127,9 @@
   color: var(--draft-ink);
 }
 
+/* The room has no fill of its own: the page's world ground flows through, so the room reads as one
+   fluid background instead of a cutout card on the page. Only the card wall stays its own pane. */
 .root {
-  background: var(--draft-surface);
   position: relative;
 }
 
@@ -202,9 +205,6 @@
 .extras,
 .wallPane {
   padding: clamp(0.5rem, 1.2cqi, 1rem);
-  border: 1px solid var(--draft-border);
-  border-radius: 0.75rem;
-  background: var(--draft-surface);
   min-inline-size: 0;
 }
 
@@ -216,6 +216,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  border: 1px solid var(--draft-border);
+  border-radius: 0.75rem;
   background: var(--draft-wall);
   isolation: isolate;
 }
@@ -272,9 +274,6 @@
     position: relative;
     top: auto;
     min-block-size: 0;
-    border: 1px solid var(--draft-border);
-    border-radius: 0.75rem;
-    background: var(--draft-surface);
   }
   .stageScroll {
     min-block-size: 0;

@@ -124,9 +124,12 @@ describe('wall layout CSS', () => {
   });
 
   it('scrolls the left column in an inner scroller without clipping its controls', () => {
-    // The clipped frame is not a scroller; the scroller ends 67.5px short of its right edge (the diagonal takes 48px).
+    // The stage column is frameless: the page's world ground flows through it (only the card wall keeps
+    // its own pane). It is not a scroller either; the scroller ends 67.5px short of its right edge (the
+    // diagonal takes 48px).
     const frame = rule('.stagePane', media('(min-width: 1024px)', '.stagePane'));
-    expect(frame).toMatch(/border: 1px solid var\(--draft-border\);/);
+    expect(frame).not.toMatch(/border:/);
+    expect(frame).not.toMatch(/background:/);
     expect(frame).not.toMatch(/clip-path:/);
     expect(frame).not.toMatch(/overflow/);
     const scroller = rule('.stageScroll', media('(min-width: 1024px)', '.stageScroll'));
