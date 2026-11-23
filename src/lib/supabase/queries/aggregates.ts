@@ -3,6 +3,10 @@ import { readBoundedPages } from '../read-bounded-pages';
 import type { Json, Tables } from '@/types/database';
 import type { Aggregate, AggregateScope, BattleStat, PlayerAggregate } from '@/types/game';
 import type { CompetitionOwner } from '@/types/competition-owner';
+import {
+  AggregateRebuildInProgressError,
+  isAggregateRebuildFence,
+} from '@/lib/supabase/queries/aggregate-rebuild-lock';
 
 type AggregateRow = Tables<'aggregates'>;
 type PlayerAggregateRow = Tables<'player_aggregates'>;
@@ -369,7 +373,10 @@ export async function applyAggregateJob(
     p_aggregate_deltas: deltas.aggregateDeltas as unknown as Json,
     p_player_deltas: deltas.playerDeltas as unknown as Json,
   });
-  if (error) throw error;
+  if (error) {
+    if (isAggregateRebuildFence(error)) throw new AggregateRebuildInProgressError(error);
+    throw error;
+  }
   return toApplyAggregateJobOutcome(data);
 }
 
@@ -443,7 +450,10 @@ export async function rollbackGameAggregates(
     p_aggregate_deltas: deltas.aggregateDeltas as unknown as Json,
     p_player_deltas: deltas.playerDeltas as unknown as Json,
   });
-  if (error) throw error;
+  if (error) {
+    if (isAggregateRebuildFence(error)) throw new AggregateRebuildInProgressError(error);
+    throw error;
+  }
   return toRollbackGameAggregatesOutcome(data);
 }
 

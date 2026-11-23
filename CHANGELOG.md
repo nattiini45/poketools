@@ -12,6 +12,7 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Upgrade notes
 
+
 - **Apply `20261124090000_aggregate_rebuild_lock.sql` BEFORE the follow-up change that wires it (CAS-427).** It adds
   the `aggregate_rebuild_lock` table and the rebuild-lock RPCs, and renames `claim_aggregate_jobs`,
   `claim_phase_aggregate_jobs`, `apply_aggregate_job`, `apply_phase_aggregate_job`, `rollback_game_aggregates` and
@@ -19,6 +20,7 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   On its own the migration is inert: the queue's claim/apply/rollback calls keep working through the wrappers, and the
   fence only engages once a rebuild claims the lock. The code that claims the lock and pre-checks it on result writes
   lands in the same release; deploying code first is safe only while this file is unapplied.
+
 
 - `20261123180000_tournaments_stage_order_seasonless.sql` adds a CHECK pinning `stage_order = 0` on season-less (standalone) tournaments. It is additive and has no order requirement relative to the code deploy; it fails its precheck if a season-less row with another value exists (none did on 2026-11-23).
 
@@ -212,6 +214,12 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   says that the string cannot carry level rules, team constraints or per-player pools.
 
 ### Changed
+
+- **Aggregate rebuilds now fence result writes (CAS-427).** `rebuildAggregatesForScope` and `rebuildMixedAggregatesForScope`
+  run under the singleton `aggregate_rebuild_lock` row (120 s TTL, heartbeated per page). While a rebuild holds it, the
+  queue's claim/apply/rollback RPCs on both stores refuse with PT409 (mapped to 409 `aggregate_rebuild_in_progress`),
+  and `recordGameResult`/`editGame`/`deleteGame` refuse before their first write. The quiescent-write precondition on
+  scope rebuilds is enforced instead of documented.
 
 - **The draft room adapts to its available width at the normal 16 px site root.** The selected evolution portrait
   stays open on phones, the clock and cards use less space there, and the two-pane layout gives the Pokémon wall

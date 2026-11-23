@@ -29,6 +29,7 @@
  */
 
 import { supabase } from '@/lib/supabase/client';
+import { isAggregateRebuildFence } from '@/lib/supabase/queries/aggregate-rebuild-lock';
 import {
   applyAggregateJob,
   buildGameAggregateDeltas,
@@ -202,6 +203,7 @@ export async function processAggregateJobs(limit = 20): Promise<ProcessAggregate
     },
     process: processJob,
     fail: markJobFailed,
+    releaseFence: releaseJobAfterFence,
     revalidate: (jobs) => Promise.all([...new Set(jobs.map((job) => job.tournament_id))]
       .map((id) => revalidateMatchPages(id))).then(() => undefined),
   });
@@ -212,6 +214,8 @@ export async function runAggregateQueue<Job extends { id: string }>(limit: numbe
   claim: (limit: number) => PromiseLike<{ data: Job[] | null; error: unknown }>;
   process: (job: Job) => Promise<boolean>;
   fail: (id: string, message: string) => Promise<void>;
+  /** Put a job fenced by a rebuild back to pending WITHOUT spending its attempt. */
+  releaseFence: (id: string) => Promise<void>;
   revalidate: (jobs: Job[]) => Promise<void>;
 }): Promise<ProcessAggregateJobsResult> {
   const result: ProcessAggregateJobsResult = { processed: 0, failed: 0, reclaimed: 0 };
@@ -232,6 +236,11 @@ export async function runAggregateQueue<Job extends { id: string }>(limit: numbe
   const { data: claimedJobs, error: claimError } = await storage.claim(limit);
 
   if (claimError) {
+    // CAS-427: the claim RPC raises PT409 while a scope rebuild holds the
+    // lock — nothing is claimable, so the run defers wholesale to after the
+    // release instead of failing. Jobs claimed earlier can still fence their
+    // apply and are retried through the normal failed -> pending path.
+    if (isAggregateRebuildFence(claimError)) return result;
     console.error('[aggregate-queue] Claim error:', claimError);
     throw new AggregateQueueClaimError({ cause: claimError });
   }
@@ -246,6 +255,18 @@ export async function runAggregateQueue<Job extends { id: string }>(limit: numbe
         affectedJobs.push(job);
       }
     } catch (err) {
+      // CAS-427: a rebuild fence is not a job failure — the job goes back to
+      // pending with its claim attempt refunded, so a fence on the last
+      // attempt cannot strand the game in 'failed'.
+      if (isAggregateRebuildFence(err)) {
+        console.error(`[aggregate-queue] Job ${job.id} fenced by an aggregate rebuild:`);
+        try {
+          await storage.releaseFence(job.id);
+        } catch (releaseErr) {
+          housekeepingErrors.push(releaseErr);
+        }
+        continue;
+      }
       console.error(`[aggregate-queue] Job ${job.id} failed:`, err);
       result.failed++;
       if (err instanceof AggregateQueueWriteError) housekeepingErrors.push(err);
@@ -327,6 +348,35 @@ async function completeJob(jobId: string): Promise<void> {
   if (error) {
     console.error(`[aggregate-queue] Complete error for job ${jobId}:`, error);
     throw new AggregateQueueWriteError(`Failed to complete aggregate job ${jobId}`, { cause: error });
+  }
+}
+
+/**
+ * CAS-427: restore a job that was claimed (attempts already incremented) but
+ * whose apply/rollback fenced on the rebuild lock. status='pending' with the
+ * claim's +1 refunded puts it back exactly where the claim found it.
+ */
+async function releaseJobAfterFence(jobId: string): Promise<void> {
+  const { data: job, error: readError } = await supabase
+    .from('aggregate_jobs')
+    .select('attempts')
+    .eq('id', jobId)
+    .eq('status', 'processing')
+    .maybeSingle();
+  if (readError) {
+    throw new AggregateQueueWriteError(`Failed to read fenced aggregate job ${jobId}`, { cause: readError });
+  }
+  // Cancelled (edit/delete) or completed meanwhile — nothing to undo.
+  if (!job) return;
+
+  aggregateJobMachine.assertTransition('processing', 'pending', 'queue');
+  const { error } = await supabase
+    .from('aggregate_jobs')
+    .update({ status: 'pending', attempts: Math.max(0, job.attempts - 1), updated_at: new Date().toISOString() })
+    .eq('id', jobId)
+    .eq('status', 'processing');
+  if (error) {
+    throw new AggregateQueueWriteError(`Failed to release fenced aggregate job ${jobId}`, { cause: error });
   }
 }
 

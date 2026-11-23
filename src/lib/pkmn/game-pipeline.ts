@@ -7,6 +7,7 @@ import {
   findGameIdByReplayHash, ReplayAlreadyRecordedError,
 } from '@/lib/supabase/queries/games';
 import { buildGameAggregateDeltas, rollbackGameAggregates } from '@/lib/supabase/queries/aggregates';
+import { assertNoAggregateRebuild } from '@/lib/supabase/queries/aggregate-rebuild-lock';
 import { shouldExcludeFromAllTime } from '@/lib/supabase/queries/test-accounts';
 import {
   enqueueAggregateJob, cancelAggregateJobsForGame, applyGameAggregatesNow,
@@ -895,6 +896,9 @@ export function createGamePipeline<M extends GamePipelineMatch, C extends GamePi
    * ONLY after this function returns successfully.
    */
   async function recordGameResult(input: GamePipelineInput): Promise<GamePipelineResult> {
+    // CAS-427: refuse up front while a scope rebuild holds the lock; a write
+    // straddling the clear could be counted twice or lost.
+    await assertNoAggregateRebuild();
     const match = await getMatchById(input.match_id);
     if (!match) throw new MatchNotFoundError();
 
@@ -1582,6 +1586,8 @@ export function createGamePipeline<M extends GamePipelineMatch, C extends GamePi
     adminId: string,
     options: GameChangeOptions = {}
   ): Promise<DeleteGameResult> {
+    // CAS-427: a rebuild fences rollbacks; fail here before any delete.
+    await assertNoAggregateRebuild();
     const game = await getGameById(gameId);
     if (!game) throw new GameNotFoundError();
 
@@ -1802,6 +1808,9 @@ export function createGamePipeline<M extends GamePipelineMatch, C extends GamePi
     adminId: string,
     cascade = false
   ): Promise<ResetMatchResult> {
+    // CAS-427: a rebuild fences the per-game rollbacks; refuse up front so a
+    // reset never aborts mid-cascade with siblings already reset.
+    await assertNoAggregateRebuild();
     const { match, tournament } = await getMatchContext(matchId);
 
     if (match.status === 'scheduled') {
@@ -2234,6 +2243,9 @@ export function createGamePipeline<M extends GamePipelineMatch, C extends GamePi
    * its count.
    */
   async function editGame(input: EditGameInput, options: GameChangeOptions = {}): Promise<EditGameResult> {
+    // CAS-427: a rebuild fences the rollback + re-apply pair; refuse before
+    // the lease claim moves the game's version.
+    await assertNoAggregateRebuild();
     const before = await getGameById(input.game_id);
     if (!before) throw new GameNotFoundError();
 

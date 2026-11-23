@@ -40,6 +40,13 @@ vi.mock('@/lib/supabase/queries/aggregates', () => ({
   clearAggregatesForScope: vi.fn(async () => ({ aggregatesDeleted: 0, playerAggregatesDeleted: 0 })),
   updateAggregatesForScope: vi.fn(async () => undefined),
 }));
+vi.mock('@/lib/supabase/queries/aggregate-rebuild-lock', () => ({
+  assertNoAggregateRebuild: vi.fn(async () => undefined),
+  isAggregateRebuildActive: vi.fn(async () => false),
+  claimAggregateRebuildLock: vi.fn(async () => '00000000-0000-0000-0000-000000000001'),
+  heartbeatAggregateRebuildLock: vi.fn(async () => undefined),
+  releaseAggregateRebuildLock: vi.fn(async () => undefined),
+}));
 vi.mock('@/lib/supabase/queries/games', () => ({
   getBattleStatsByGame: vi.fn(async () => [{ id: 'bs-1' }]),
   getNewestGameCreatedAt: vi.fn(async () => '2026-10-19T00:00:00Z'),

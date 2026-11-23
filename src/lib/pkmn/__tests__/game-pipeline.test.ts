@@ -1,3 +1,13 @@
+vi.mock('@/lib/supabase/queries/aggregate-rebuild-lock', () => ({
+  assertNoAggregateRebuild: vi.fn(async () => {}),
+  isAggregateRebuildActive: vi.fn(async () => false),
+  claimAggregateRebuildLock: vi.fn(async () => 'holder-1'),
+  heartbeatAggregateRebuildLock: vi.fn(async () => {}),
+  releaseAggregateRebuildLock: vi.fn(async () => {}),
+  isAggregateRebuildFence: vi.fn((e: unknown) => (e as { code?: unknown }).code === 'PT409'),
+  AggregateRebuildInProgressError: class AggregateRebuildInProgressError extends Error {},
+}));
+
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── Mock all query imports ─────────────────────────────────────────

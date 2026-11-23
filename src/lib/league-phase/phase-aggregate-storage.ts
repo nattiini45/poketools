@@ -15,6 +15,10 @@ import {
   type AggregateJobStats,
 } from '@/lib/match/aggregate-queue';
 import { phaseAggregateJobMachine } from './phase-aggregate-job-state';
+import {
+  AggregateRebuildInProgressError,
+  isAggregateRebuildFence,
+} from '@/lib/supabase/queries/aggregate-rebuild-lock';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { isLiveIncrementJob } from '@/lib/supabase/queries/games';
 import type { CompetitionOwner } from '@/types/competition-owner';
@@ -48,7 +52,10 @@ export async function applyPhaseAggregateJob(jobId: string, gameId: string, delt
     p_aggregate_deltas: deltas.aggregateDeltas as unknown as Json,
     p_player_deltas: deltas.playerDeltas as unknown as Json,
   });
-  if (error) throw error;
+  if (error) {
+    if (isAggregateRebuildFence(error)) throw new AggregateRebuildInProgressError(error);
+    throw error;
+  }
   switch (data) {
     case 'applied': case 'already_applied': case 'game_missing': case 'job_not_processing': return data;
     default: throw new Error(`apply_phase_aggregate_job returned an unknown outcome: ${JSON.stringify(data)}`);
@@ -67,7 +74,10 @@ export async function rollbackPhaseGameAggregates(gameId: string, expectedApplie
     p_aggregate_deltas: deltas.aggregateDeltas as unknown as Json,
     p_player_deltas: deltas.playerDeltas as unknown as Json,
   });
-  if (error) throw error;
+  if (error) {
+    if (isAggregateRebuildFence(error)) throw new AggregateRebuildInProgressError(error);
+    throw error;
+  }
   switch (data) {
     case 'rolled_back': case 'not_applied': case 'marker_changed': case 'game_missing': return data;
     default: throw new Error(`rollback_phase_game_aggregates returned an unknown outcome: ${JSON.stringify(data)}`);
@@ -94,6 +104,19 @@ async function failJob(id: string, message: string): Promise<void> {
   if (result.error) throw new AggregateQueueWriteError(`Failed to retry phase aggregate job ${id}`, { cause: result.error });
 }
 
+/** CAS-427 twin of the legacy release: a fenced apply refunds the claim's +1. */
+async function releasePhaseJobAfterFence(id: string): Promise<void> {
+  const { data, error } = await supabase.from('phase_aggregate_jobs').select('attempts')
+    .eq('id', id).eq('status', 'processing').maybeSingle();
+  if (error) throw new AggregateQueueWriteError(`Failed to read fenced phase aggregate job ${id}`, { cause: error });
+  if (!data) return;
+  phaseAggregateJobMachine.assertTransition('processing', 'pending', 'queue');
+  const result = await supabase.from('phase_aggregate_jobs')
+    .update({ status: 'pending', attempts: Math.max(0, data.attempts - 1), updated_at: new Date().toISOString() })
+    .eq('id', id).eq('status', 'processing');
+  if (result.error) throw new AggregateQueueWriteError(`Failed to release fenced phase aggregate job ${id}`, { cause: result.error });
+}
+
 export async function processPhaseAggregateJobs(limit = 20, onApplied?: (owner: PhaseAggregateOwner) => Promise<void>) {
   return runAggregateQueue<PhaseAggregateJob>(limit, {
     reclaim: () => supabase.rpc('reclaim_stale_phase_aggregate_jobs'),
@@ -115,6 +138,7 @@ export async function processPhaseAggregateJobs(limit = 20, onApplied?: (owner: 
       return await applyPhaseAggregateJob(job.id, job.game_id, deltas) === 'applied';
     },
     fail: failJob,
+    releaseFence: releasePhaseJobAfterFence,
     revalidate: async (jobs) => {
       const owners = new Map(jobs.map((job) => [job.phase_id, { kind: 'phase' as const, phase_id: job.phase_id, season_id: job.season_id }]));
       for (const owner of owners.values()) {

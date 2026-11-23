@@ -23,6 +23,12 @@ import {
 } from '@/lib/match/aggregate-queue';
 import type { AggregateScope } from '@/types/game';
 import {
+  claimAggregateRebuildLock,
+  heartbeatAggregateRebuildLock,
+  isAggregateRebuildActive,
+  releaseAggregateRebuildLock,
+} from '@/lib/supabase/queries/aggregate-rebuild-lock';
+import {
   getPhaseAggregateJobStats, processPhaseAggregateJobs, getNewestPhaseGameCreatedAt,
   listPhaseGameIdsWithLiveIncrementJobs, listPhaseGamesForAggregateRebuild,
   getPhaseAggregateSeasonId,
@@ -33,6 +39,40 @@ import { getPhaseBattleStatsByGame } from '@/lib/supabase/queries/phase-games';
 const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_MAX_ROUNDS = 100;
 const REBUILD_PAGE_SIZE = 100;
+/**
+ * Lock TTL, comfortably above one recount page's worst duration: the fence
+ * only lapses while the holder keeps working when a single page outlasts it,
+ * so the margin must be large. Heartbeats refresh it before every page (and
+ * once after the scope clear, which itself can be slow on a big scope).
+ */
+const REBUILD_LOCK_TTL_SECONDS = 600;
+/**
+ * Writer transactions that passed the app-level fence check just before the
+ * claim finish inside this window, so their enqueue lands before the fence
+ * read and they are never both recounted and applied. Covers an in-flight
+ * apply/rollback the same way.
+ */
+const REBUILD_CLAIM_GRACE_MS = 3000;
+
+/**
+ * CAS-427: the whole clear + recount runs under the singleton rebuild lock.
+ * Claim first (PT409 while another rebuild holds it), wait out in-flight
+ * writers, heartbeat per page, release in `finally` — expiry covers a crashed
+ * rebuild.
+ */
+async function withAggregateRebuildLock<T>(
+  scopeType: AggregateScope,
+  scopeId: string | null,
+  fn: (heartbeat: () => Promise<void>) => Promise<T>
+): Promise<T> {
+  const holder = await claimAggregateRebuildLock(scopeType, scopeId, REBUILD_LOCK_TTL_SECONDS);
+  try {
+    await new Promise((resolve) => setTimeout(resolve, REBUILD_CLAIM_GRACE_MS));
+    return await fn(() => heartbeatAggregateRebuildLock(holder, REBUILD_LOCK_TTL_SECONDS));
+  } finally {
+    await releaseAggregateRebuildLock(holder);
+  }
+}
 
 export interface DrainAggregateJobsResult extends ProcessAggregateJobsResult {
   rounds: number;
@@ -101,6 +141,12 @@ async function drainAggregateQueue(options: DrainOptions, stats: typeof getAggre
     if (statsAfterRound.pending === 0 && statsAfterRound.processing === 0) {
       break;
     }
+    // CAS-427: a round that claimed nothing and failed nothing while jobs
+    // remain means the claim was fenced — stop instead of spinning to
+    // maxRounds; the queue resumes once the rebuild releases.
+    if (result.processed === 0 && result.failed === 0 && (await isAggregateRebuildActive())) {
+      break;
+    }
   }
 
   return {
@@ -118,10 +164,24 @@ export async function rebuildAggregatesForScope(
   if (scopeType !== 'all_time' && !scopeId) {
     throw new Error('scope_id required for tournament and league rebuilds');
   }
+  return withAggregateRebuildLock(scopeType, scopeId, (heartbeat) =>
+    rebuildLockedAggregatesForScope(scopeType, scopeId, heartbeat));
+}
 
+async function rebuildLockedAggregatesForScope(
+  scopeType: AggregateScope,
+  scopeId: string | null,
+  heartbeat: () => Promise<void>
+): Promise<RebuildAggregatesForScopeResult> {
   // Consistency window: deletes scope rows before recompute. Readers may see
   // empty/partial usage until this finishes — operators are warned in Admin UI.
+  // The whole function runs under the CAS-427 rebuild lock: claim/apply/rollback
+  // are fenced for its duration, and the post-claim grace lets writer
+  // transactions that passed the app-level check finish before this clear.
   const cleared = await clearAggregatesForScope(scopeType, scopeId);
+  // The clear may take a while on a large scope; refresh before the fence
+  // read so the lock cannot lapse between claim and the first page.
+  await heartbeat();
 
   // Fence against the queue, read right after the clear. A game the queue will
   // still count (live increment job, its marker NULL) is left to the queue:
@@ -129,13 +189,12 @@ export async function rebuildAggregatesForScope(
   // rebuild never sets the marker). The same holds for a game recorded after
   // the clear, whose own job counts it into the cleared scope; the
   // `createdUpTo` bound leaves those out and keeps the offset pages stable.
-  // Overlaps that remain (docs/match.md, "Scope rebuilds and the queue"): a
-  // job that applies between the clear and this read; a game whose recording
-  // transaction started before this read (`created_at` is its start time) but
-  // committed after it; and a game read between its battle-stats write and
-  // its job enqueue. All need results recorded during the rebuild; re-running
-  // the rebuild repairs them. A NULL-marker game without a job cannot be
-  // skipped instead: games recorded before the queue existed look the same.
+  // What remains (docs/match.md, "Scope rebuilds and the queue"): a writer
+  // transaction that outlives the post-claim grace (stats committed pre-bound
+  // but the job enqueued after this read) is counted here AND by its job
+  // later — bounded by the grace window, repaired by re-running the rebuild.
+  // A NULL-marker game without a job cannot be skipped instead: games
+  // recorded before the queue existed look the same.
   const [queuedGameIds, createdUpTo] = await Promise.all([
     listGameIdsWithLiveIncrementJobs(),
     getNewestGameCreatedAt(),
@@ -146,6 +205,7 @@ export async function rebuildAggregatesForScope(
   const tournamentIds = new Set<string>();
 
   while (true) {
+    await heartbeat();
     const games = await listGamesForAggregateRebuild(
       scopeType,
       scopeId,
@@ -192,7 +252,18 @@ export async function rebuildMixedAggregatesForScope(
 ): Promise<RebuildAggregatesForScopeResult> {
   if (scopeType === 'tournament') return rebuildAggregatesForScope(scopeType, scopeId);
   if (scopeType !== 'all_time' && !scopeId) throw new Error('scope_id required for phase and league rebuilds');
+  return withAggregateRebuildLock(scopeType, scopeId, (heartbeat) =>
+    rebuildLockedMixedAggregatesForScope(scopeType, scopeId, onPhaseRebuilt, heartbeat));
+}
+
+async function rebuildLockedMixedAggregatesForScope(
+  scopeType: AggregateScope, scopeId: string | null,
+  onPhaseRebuilt: ((phaseId: string, seasonId: string) => Promise<void>) | undefined,
+  heartbeat: () => Promise<void>
+): Promise<RebuildAggregatesForScopeResult> {
   const cleared = await clearAggregatesForScope(scopeType, scopeId);
+  // Same as the legacy rebuild: refresh after the (potentially slow) clear.
+  await heartbeat();
   const [phaseLive, phaseBound, legacyLive, legacyBound] = await Promise.all([
     listPhaseGameIdsWithLiveIncrementJobs(), getNewestPhaseGameCreatedAt(),
     scopeType === 'phase' ? new Set<string>() : listGameIdsWithLiveIncrementJobs(),
@@ -210,6 +281,7 @@ export async function rebuildMixedAggregatesForScope(
   for (const kind of scopeType === 'phase' ? ['phase'] as const : ['phase', 'tournament'] as const) {
     let offset = 0;
     for (let page = 0; ; page++) {
+      await heartbeat();
       if (page === maxPages) throw new Error('Aggregate rebuild exceeded its bounded game read; rerun in smaller scopes');
       const games = kind === 'phase'
         ? await listPhaseGamesForAggregateRebuild(scopeType, scopeId, offset, REBUILD_PAGE_SIZE, phaseBound)
