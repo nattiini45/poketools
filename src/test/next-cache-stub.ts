@@ -18,3 +18,11 @@ export async function revalidatePath(..._args: unknown[]): Promise<void> {
 export function revalidateTag(..._args: unknown[]): void {
   // Intentional no-op: script runners have no Next.js revalidation runtime.
 }
+
+/**
+ * Pass-through for `unstable_cache` (`src/lib/team-comparison.server.ts`, `src/lib/seo/page-reads.ts`):
+ * there is no data cache outside Next, so the wrapped loader just runs.
+ */
+export function unstable_cache<T extends (...args: never[]) => unknown>(fn: T): T {
+  return fn;
+}
