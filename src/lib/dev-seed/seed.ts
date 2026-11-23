@@ -5,8 +5,9 @@
  *
  * Idempotent: every step looks for what it would create first, so a second run changes nothing. The league is the one
  * named `DEV_SEED_LEAGUE_NAME`; the example pack's rules apply (nothing here reads a pack), and the ruleset is the
- * standard Gen 9 OU one. On a stack whose `phase_storage_state.mode` is `phase` or `frozen_phase` the league stage is
- * written on the native phase tables instead, where the legacy-write freeze does not apply.
+ * standard Gen 9 OU one. On a stack whose `phase_storage_state.mode` is `phase` the league stage is written on the
+ * native phase tables instead, where the legacy-write freeze does not apply. A frozen mode refuses the seed outright:
+ * `frozen_legacy` fences the legacy tables and `frozen_phase` additionally fences the phase ones, so neither path can write.
  */
 import 'server-only';
 
@@ -301,8 +302,13 @@ async function ensureLeague(playerIds: string[]): Promise<{ leagueId: string; to
   }
 
   const mode = await readStorageMode();
+  if (mode === 'frozen_legacy' || mode === 'frozen_phase') {
+    // The storage freeze fences both write paths (the phase one for any mode
+    // but `phase`, the legacy one once it is set), so no stage can be seeded.
+    throw new Error(`phase storage is frozen (${mode}); unfreeze before seeding`);
+  }
   const tournamentId =
-    mode === 'phase' || mode === 'frozen_phase'
+    mode === 'phase'
       ? await ensurePhaseStage(season.id, versionId, playerIds)
       : await ensureStage(season.id, versionId, playerIds);
   if (!existing || existing.status === 'upcoming') await updateSeason(season.id, { status: 'active' });
