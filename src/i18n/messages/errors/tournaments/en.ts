@@ -161,6 +161,12 @@ export default {
   // A format could not react to a phase status change (warning, 200).
   format_reaction_failed:
     "The phase status was saved, but the league format's reaction to it (stage start or end, tie checks) did not run. Send the same status again to repeat it.",
+  // The bracket-repair sync of the saved bracket_reset_enabled failed (warning, 200); retry with bracket_reset_sync_retry.
+  bracket_reset_sync_failed:
+    'The setting was saved, but applying it to the existing bracket failed. The failure was logged. Retry it with bracket_reset_sync_retry: true.',
+  // The sync of the saved third_place_enabled failed (warning, 200); retry with third_place_sync_retry.
+  third_place_sync_failed:
+    'The setting was saved, but applying it to the existing bracket failed. The failure was logged. Retry it with third_place_sync_retry: true.',
   // A match of the round changed (a result, an accepted challenge) between the admin's reset and the delete; nothing was deleted (409).
   round_changed: 'A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.',
   phase_round_delete_confirm_required: 'Deleting a round requires confirm: true.',

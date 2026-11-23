@@ -146,6 +146,12 @@ export default defineDe<typeof en>()({
     'Die Runde wurde geändert, aber die Auswirkungen einiger nicht mehr geltender Ergebnisse auf das Format der Liga (Item-Vergaben, Punkte) konnten nicht zurückgenommen werden. Der Fehler wurde protokolliert. Prüfe die Anpassungen der Liga für die Punkte und Items dieser Ergebnisse.',
   format_reaction_failed:
     'Der Phasenstatus wurde gespeichert, aber die Reaktion des Ligaformats darauf (Stufenstart oder -ende, Gleichstand-Prüfungen) ist nicht gelaufen. Sende denselben Status erneut, um sie zu wiederholen.',
+  // The bracket-repair sync of the saved bracket_reset_enabled failed (warning, 200); retry with bracket_reset_sync_retry.
+  bracket_reset_sync_failed:
+    'Die Einstellung wurde gespeichert, aber ihre Anwendung auf das bestehende Bracket ist fehlgeschlagen. Der Fehler wurde protokolliert. Wiederhole sie mit bracket_reset_sync_retry: true.',
+  // The sync of the saved third_place_enabled failed (warning, 200); retry with third_place_sync_retry.
+  third_place_sync_failed:
+    'Die Einstellung wurde gespeichert, aber ihre Anwendung auf das bestehende Bracket ist fehlgeschlagen. Der Fehler wurde protokolliert. Wiederhole sie mit third_place_sync_retry: true.',
   round_changed: 'Ein Match dieser Runde hat sich geändert, während sie gelöscht wurde, deshalb wurde nichts gelöscht. Lade die Runde neu und versuche es erneut.',
   phase_round_delete_confirm_required: 'Eine Runde lässt sich nur mit confirm: true löschen.',
   phase_round_delete_changed: 'Die Runde oder eines ihrer Matches hat sich beim Löschen geändert. Lade die Runde neu und versuche es erneut.',

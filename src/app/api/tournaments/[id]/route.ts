@@ -214,7 +214,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const outcome = await updateTournamentWithStatus(before, body, {
       actor: 'admin',
       afterWrite: async (tournament) => {
-        if (resetToggleChanged) {
+        if (resetToggleChanged || body.bracket_reset_sync_retry === true) {
           try {
             bracketResetSync = await syncBracketResetSetting(
               tournament,
@@ -228,7 +228,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             bracketResetSyncError = 'bracket_reset_sync_failed';
           }
         }
-        if (thirdPlaceToggleChanged) {
+        if (thirdPlaceToggleChanged || body.third_place_sync_retry === true) {
           try {
             thirdPlaceSync = await syncThirdPlaceSetting(tournament, await getParticipants(id));
           } catch (err) {
@@ -310,10 +310,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    // A failed bracket sync stays logged and audited; the response also warns, so the admin can retry it
+    // with the explicit *_sync_retry fields instead of toggling the setting off and on (issue #152).
+    const warnings = [
+      ...(formatReactionFailed ? [{ code: 'format_reaction_failed' }] : []),
+      ...(bracketResetSyncError ? [{ code: 'bracket_reset_sync_failed' }] : []),
+      ...(thirdPlaceSyncError ? [{ code: 'third_place_sync_failed' }] : []),
+    ];
     return NextResponse.json<ApiResult<typeof tournament>>({
       success: true,
       data: tournament,
-      ...(formatReactionFailed ? { warnings: [{ code: 'format_reaction_failed' }] } : {}),
+      ...(warnings.length > 0 ? { warnings } : {}),
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update tournament');

@@ -10,7 +10,7 @@ import type { TournamentFormData } from '@/types/tournament';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
-import TournamentSettingsEditor, { saveTournamentSettings } from '../TournamentSettingsEditor';
+import TournamentSettingsEditor, { retryTournamentSync, saveTournamentSettings } from '../TournamentSettingsEditor';
 
 const ID = '0b9f1c2e-5d4a-4c3b-9a8e-7f6d5c4b3a21';
 const RULESET_ID = '11111111-1111-4111-8111-111111111111';
@@ -111,7 +111,7 @@ describe('saveTournamentSettings', () => {
     const fetchImpl = vi.fn();
     await expect(
       saveTournamentSettings(tournament, untouched(), open, fetchImpl as unknown as typeof fetch),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ sent: false, warnings: [] });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -124,7 +124,7 @@ describe('saveTournamentSettings', () => {
         locked,
         fetchImpl as unknown as typeof fetch,
       ),
-    ).resolves.toBe(false);
+    ).resolves.toEqual({ sent: false, warnings: [] });
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
@@ -138,7 +138,7 @@ describe('saveTournamentSettings', () => {
         locked,
         fetchImpl as unknown as typeof fetch,
       ),
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ sent: true, warnings: [] });
 
     const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(`/api/tournaments/${ID}`);
@@ -177,5 +177,25 @@ describe('saveTournamentSettings', () => {
     await expect(
       saveTournamentSettings(tournament, untouched({ name: 'X' }), open, fetchImpl as unknown as typeof fetch),
     ).rejects.toMatchObject({ message: '' });
+  });
+
+  it('returns the warnings of a saved write so the editor can offer a retry', async () => {
+    const fetchImpl = vi.fn(
+      async () => ({ json: async () => ({ success: true, data: {}, warnings: [{ code: 'third_place_sync_failed' }] }) }) as unknown as Response,
+    );
+
+    await expect(
+      saveTournamentSettings(tournament, untouched({ name: 'X' }), open, fetchImpl as unknown as typeof fetch),
+    ).resolves.toEqual({ sent: true, warnings: [{ code: 'third_place_sync_failed' }] });
+  });
+
+  it('retryTournamentSync PATCHes only the explicit retry field (issue #152)', async () => {
+    const fetchImpl = vi.fn(async () => ({ json: async () => ({ success: true, data: {}, warnings: [] }) }) as unknown as Response);
+
+    await expect(retryTournamentSync(ID, 'third_place_sync_retry', fetchImpl as unknown as typeof fetch)).resolves.toEqual([]);
+
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`/api/tournaments/${ID}`);
+    expect(JSON.parse(String(init.body))).toEqual({ third_place_sync_retry: true });
   });
 });

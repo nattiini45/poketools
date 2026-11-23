@@ -67,6 +67,7 @@ export default defineDe<typeof en>()({
     submit: 'Turnier erstellen',
     saveChanges: 'Änderungen speichern',
     saved: 'Turnier-Einstellungen gespeichert.',
+    retrySync: 'Bracket-Sync wiederholen',
     lockedStarted: 'Gesperrt: Das Turnier ist gestartet.',
     lockedRounds: 'Gesperrt: Es wurden bereits Runden erzeugt.',
     saveFailed: 'Speichern fehlgeschlagen.',
