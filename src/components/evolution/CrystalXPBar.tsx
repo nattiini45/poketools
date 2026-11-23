@@ -92,10 +92,12 @@ export default function CrystalXPBar({
 
   const finish = useCallback(() => {
     setPhase('done');
+    hasAnimatedRef.current = true;
     onAnimationComplete?.();
   }, [onAnimationComplete]);
 
   const skipAnimation = useCallback(() => {
+    hasAnimatedRef.current = true;
     clearTimers();
     if (isEvolution && nextLabel) {
       setDisplayLabel(nextLabel);
@@ -110,10 +112,13 @@ export default function CrystalXPBar({
 
   useEffect(() => {
     if (previousValue === undefined || previousValue === current || hasAnimatedRef.current) return;
-    hasAnimatedRef.current = true;
 
+    // The flag moves to the completion paths (finish/skip/the reduced-motion callback): setting it
+    // here lets React StrictMode's simulated unmount cancel the timers and the re-run exits early,
+    // so the animation never fires under `next dev` (issue #139).
     if (reducedMotionRef.current) {
       const t = setTimeout(() => {
+        hasAnimatedRef.current = true;
         if (isEvolution && nextLabel) {
           setDisplayLabel(nextLabel);
           setDisplaySprite(nextSpriteSpecies ?? spriteSpecies);
