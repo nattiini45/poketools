@@ -46,7 +46,7 @@ The same-league enrollment-source FK is deferred `NO ACTION`: deleting the compl
 
 The foundation extends the complete inventory, restore order, external pointers, capture predicates, deadline shifts, derived-job restoration and expiry match IDs for both storage families. Legacy snapshot rows remain readable without conversion at this stage. A phase game restored with statistics gets a pending phase aggregate job and an uncounted marker; the phase, league and all-time projections are rebuilt by the phase worker once that worker ships.
 
-The inventory contains 86 owned tables, eight derived tables and the same two kept logs. Phase-owned cast sessions are captured; independent sessions are outside pointers. The restore defers independent teams' phase match/fork pointers until phase teams exist, then re-links outside rows. Expiry includes both match stores when returning IDs for the existing social-image sweep.
+The inventory contains 86 owned tables, eight derived tables and the kept logs. Phase-owned cast sessions are captured; independent sessions are outside pointers. The restore defers independent teams' phase match/fork pointers until phase teams exist, then re-links outside rows. Expiry includes both match stores when returning IDs for the existing social-image sweep.
 
 In phase mode, restoring a snapshot that still holds league stages as `tournaments` rows is refused by the league-tournament guard above and maps to `LEAGUE_TRASH_LEGACY_SNAPSHOT` (409); the restore is one transaction, so nothing of the league comes back. The league-trash local suite trashes and restores a legacy-only league in the legacy pass and a native-only league in the phase pass, both as the service role, and checks that refusal in the phase pass.
 

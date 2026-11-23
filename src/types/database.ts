@@ -8640,6 +8640,7 @@ export type Database = {
         }[]
       }
       aggregate_rebuild_active: { Args: never; Returns: boolean }
+      aggregate_rebuild_guard: { Args: never; Returns: undefined }
       apply_aggregate_job: {
         Args: {
           p_aggregate_deltas: Json

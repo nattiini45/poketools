@@ -128,7 +128,7 @@ describe('the replay sees the schema (sanity)', () => {
       'player_aggregates',
       'rating_history',
     ]);
-    expect(sorted([...INVENTORY].filter(([, c]) => c === 'kept').map(([r]) => r))).toEqual(['audit_log', 'draft_action_log']);
+    expect(sorted([...INVENTORY].filter(([, c]) => c === 'kept').map(([r]) => r))).toEqual(['aggregate_rebuild_lock', 'audit_log', 'draft_action_log']);
     expect(POINTERS.length).toBeGreaterThanOrEqual(7);
     expect(EXTERNAL.map((e) => e.parent)).toContain('players');
     expect(PLAN.length).toBeGreaterThan(OWNED.size);
@@ -192,7 +192,7 @@ describe('every table the league reaches is classified', () => {
 describe('tables with no foreign key to the league', () => {
   it('only the known polymorphic tables carry a scope or resource key', () => {
     const polymorphic = new Set([...declaredColumns(/^(?:scope|resource)_(?:type|id)$/).keys()]);
-    const known = new Set(['aggregates', 'player_aggregates', 'resource_admins', 'discord_webhooks', 'social_integrations', 'wiki_notes', 'audit_log']);
+    const known = new Set(['aggregates', 'player_aggregates', 'aggregate_rebuild_lock', 'resource_admins', 'discord_webhooks', 'social_integrations', 'wiki_notes', 'audit_log']);
     expect(sorted([...polymorphic].filter((table) => !known.has(table)))).toEqual([]);
     // ... and every one of them is classified.
     for (const table of known) expect(INVENTORY.has(table), table).toBe(true);

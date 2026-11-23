@@ -11,11 +11,18 @@
 -- fence read (skipped, applied after release) or enqueued after it (its game postdates the recount bound), and
 -- fenced inserts would strand counted games with no job. The app entry points (recordGameResult, editGame,
 -- deleteGame) additionally check the lock before writing, so user writes see a clean 409 rather than a
--- mid-path failure; the rebuild's post-claim grace wait covers writer transactions that passed that check just
--- before the claim.
+-- mid-path failure; the rebuild's post-claim grace wait covers app-level writer transactions that passed
+-- that check just before the claim.
+--
+-- The fence's check is made atomic with the write it guards through the lock row itself, which is pre-seeded
+-- and never deleted (release resets it): every wrapper takes FOR SHARE on id = 1 FIRST and asserts while
+-- holding it through the inner call, so a claim's FOR UPDATE drains (waits out) every in-flight RPC write
+-- before it activates the lease, and a writer that queued behind a waiting claim sees the active lease when
+-- it wakes and fences instead of proceeding. The grace wait only has to cover app entry points, which do not
+-- hold the row lock.
 --
 -- The six existing functions keep their bodies: each is renamed to <name>_inner (grants follow the function)
--- and a same-signature wrapper performs the fence first, so every caller keeps working unchanged.
+-- and a same-signature wrapper performs the guard + fence first, so every caller keeps working unchanged.
 --
 -- Refusals a PostgREST caller must see use the custom-error form PT409 (HTTP 409): a raised 40001 never leaves
 -- the function (20261121220000_fence_sqlstate_pt409.sql).
@@ -46,10 +53,17 @@ CREATE TABLE public.aggregate_rebuild_lock (
 ALTER TABLE public.aggregate_rebuild_lock ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.aggregate_rebuild_lock TO service_role;
 
+-- The row exists permanently (free state = expired). Every fenced RPC locks it FOR SHARE, so it must exist
+-- before any wrapper can run; a claim takes FOR UPDATE on the same row.
+INSERT INTO public.aggregate_rebuild_lock (id, holder, scope_type, expires_at)
+VALUES (1, '00000000-0000-0000-0000-000000000000', 'none', '-infinity');
+
 COMMENT ON TABLE public.aggregate_rebuild_lock IS
-  'Singleton (id = 1) coordination point of CAS-427: a scope aggregate rebuild holds this row for its whole
-   clear+recount and heartbeats it; assert_no_aggregate_rebuild fences claim/apply/rollback RPCs (and app
-   write entry points) while an unexpired row exists. Crash-safe through expires_at.';
+  'Singleton (id = 1) coordination point of CAS-427, pre-seeded free (expires_at = -infinity) and never
+   deleted: a scope aggregate rebuild marks it for its whole clear+recount and heartbeats it;
+   assert_no_aggregate_rebuild fences claim/apply/rollback RPCs (and app write entry points) while it is
+   unexpired. Crash-safe through expires_at. Its row lock is also the serialization point: fenced RPCs hold
+   FOR SHARE on it through their inner call and claim takes FOR UPDATE, which drains in-flight writes.';
 
 CREATE OR REPLACE FUNCTION public.assert_no_aggregate_rebuild() RETURNS void
 LANGUAGE plpgsql
@@ -71,8 +85,26 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.assert_no_aggregate_rebuild() IS
-  'CAS-427 fence: raises PT409 while an unexpired aggregate_rebuild_lock row exists. Called by the
-   claim/apply/rollback wrappers of both stores and by the app write entry points.';
+  'CAS-427 fence: raises PT409 while an unexpired aggregate_rebuild_lock row exists. Called by
+   aggregate_rebuild_guard (which holds the row FOR SHARE first) and by the app write entry points.';
+
+CREATE OR REPLACE FUNCTION public.aggregate_rebuild_guard() RETURNS void
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+BEGIN
+  -- Lock the guard row FIRST: while a claim holds FOR UPDATE this queues behind it, and the assert below
+  -- then sees the freshly-activated lease and fences. While this FOR SHARE is held, no claim can activate
+  -- the lease, so the assert and the inner call it guards run under one consistent lock state.
+  PERFORM 1 FROM public.aggregate_rebuild_lock WHERE id = 1 FOR SHARE;
+  PERFORM public.assert_no_aggregate_rebuild();
+END;
+$$;
+
+COMMENT ON FUNCTION public.aggregate_rebuild_guard() IS
+  'CAS-427 fence entry of the claim/apply/rollback wrappers: holds the singleton row FOR SHARE through the
+   caller''s transaction (blocking a claim''s FOR UPDATE), then asserts no live rebuild. The pair makes the
+   fence check atomic with the write it guards.';
 
 CREATE OR REPLACE FUNCTION public.aggregate_rebuild_active() RETURNS boolean
 LANGUAGE plpgsql
@@ -106,16 +138,20 @@ BEGIN
   IF p_ttl_seconds IS NULL OR p_ttl_seconds <= 0 THEN
     RAISE EXCEPTION 'p_ttl_seconds must be a positive integer' USING ERRCODE = '22023';
   END IF;
-  INSERT INTO public.aggregate_rebuild_lock (id, holder, scope_type, scope_id, expires_at)
-  VALUES (1, v_holder, p_scope_type, p_scope_id, now() + make_interval(secs => p_ttl_seconds))
-  ON CONFLICT (id) DO UPDATE
-    SET holder = EXCLUDED.holder,
-        scope_type = EXCLUDED.scope_type,
-        scope_id = EXCLUDED.scope_id,
-        acquired_at = now(),
-        heartbeat_at = now(),
-        expires_at = EXCLUDED.expires_at
-    WHERE public.aggregate_rebuild_lock.expires_at <= now();
+  -- FOR UPDATE drains every in-flight fenced RPC write (their FOR SHARE) before the lease activates: this
+  -- statement waits until the last shared holder commits, so nothing that already passed the fence can
+  -- still be writing aggregates when the recount starts. Writers that arrive while this waits queue behind
+  -- it on FOR SHARE and see the active lease when it commits. clock_timestamp() (wall clock, not transaction
+  -- start) keeps that wait from consuming the lease: the TTL runs from when the claim actually acquired.
+  PERFORM 1 FROM public.aggregate_rebuild_lock WHERE id = 1 FOR UPDATE;
+  UPDATE public.aggregate_rebuild_lock
+     SET holder = v_holder,
+         scope_type = p_scope_type,
+         scope_id = p_scope_id,
+         acquired_at = clock_timestamp(),
+         heartbeat_at = clock_timestamp(),
+         expires_at = clock_timestamp() + make_interval(secs => p_ttl_seconds)
+   WHERE id = 1 AND expires_at <= clock_timestamp();
   IF NOT FOUND THEN
     SELECT holder, scope_type, scope_id, expires_at INTO v_lock
       FROM public.aggregate_rebuild_lock WHERE id = 1;
@@ -128,8 +164,9 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.claim_aggregate_rebuild_lock(text, text, integer) IS
-  'CAS-427: claim the singleton rebuild lock for a scope, stealing it only when expired; returns the holder
-   token the caller must pass to heartbeat/release. Raises PT409 while a live rebuild holds it. Service-role only.';
+  'CAS-427: claim the singleton rebuild lock for a scope, stealing it only when expired; its FOR UPDATE
+   drains in-flight fenced writes before the lease activates. Returns the holder token the caller must
+   pass to heartbeat/release. Raises PT409 while a live rebuild holds it. Service-role only.';
 
 CREATE OR REPLACE FUNCTION public.heartbeat_aggregate_rebuild_lock(
   p_holder uuid,
@@ -142,12 +179,16 @@ BEGIN
   IF p_ttl_seconds IS NULL OR p_ttl_seconds <= 0 THEN
     RAISE EXCEPTION 'p_ttl_seconds must be a positive integer' USING ERRCODE = '22023';
   END IF;
+  -- FOR UPDATE serializes with claims, and the expiry check is part of the match: a heartbeat that arrives
+  -- after the TTL lapsed must NOT revive the lease — writers already passed the fence in the gap, so the
+  -- holder's rebuild is lost and must restart (a new claim) rather than continue over them.
+  PERFORM 1 FROM public.aggregate_rebuild_lock WHERE id = 1 FOR UPDATE;
   UPDATE public.aggregate_rebuild_lock
-     SET heartbeat_at = now(),
-         expires_at = now() + make_interval(secs => p_ttl_seconds)
-   WHERE id = 1 AND holder = p_holder;
+     SET heartbeat_at = clock_timestamp(),
+         expires_at = clock_timestamp() + make_interval(secs => p_ttl_seconds)
+   WHERE id = 1 AND holder = p_holder AND expires_at > clock_timestamp();
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'aggregate rebuild lock is not held by % (released or stolen)', p_holder
+    RAISE EXCEPTION 'aggregate rebuild lock is not held by % (released, stolen, or expired)', p_holder
       USING ERRCODE = 'PT409';
   END IF;
 END;
@@ -155,14 +196,20 @@ $$;
 
 COMMENT ON FUNCTION public.heartbeat_aggregate_rebuild_lock(uuid, integer) IS
   'CAS-427: extend the rebuild lock while its holder keeps working (one call per recount page). Raises PT409
-   when the holder lost the lock. Service-role only.';
+   when the holder lost the lock — including a heartbeat that lands after expiry, which would revive a
+   lease over writes admitted during the gap. Service-role only.';
 
 CREATE OR REPLACE FUNCTION public.release_aggregate_rebuild_lock(p_holder uuid) RETURNS void
 LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  DELETE FROM public.aggregate_rebuild_lock WHERE id = 1 AND holder = p_holder;
+  -- The row is permanent: release resets it to the free state instead of deleting it, so fenced RPCs
+  -- always have a row to lock FOR SHARE.
+  UPDATE public.aggregate_rebuild_lock
+     SET holder = '00000000-0000-0000-0000-000000000000',
+         expires_at = '-infinity'
+   WHERE id = 1 AND holder = p_holder;
 END;
 $$;
 
@@ -179,7 +226,7 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  PERFORM public.assert_no_aggregate_rebuild();
+  PERFORM public.aggregate_rebuild_guard();
   RETURN QUERY SELECT * FROM public.claim_aggregate_jobs_inner(p_limit);
 END;
 $$;
@@ -190,7 +237,7 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  PERFORM public.assert_no_aggregate_rebuild();
+  PERFORM public.aggregate_rebuild_guard();
   RETURN QUERY SELECT * FROM public.claim_phase_aggregate_jobs_inner(p_limit);
 END;
 $$;
@@ -211,7 +258,7 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  PERFORM public.assert_no_aggregate_rebuild();
+  PERFORM public.aggregate_rebuild_guard();
   RETURN public.apply_aggregate_job_inner(p_job_id, p_game_id, p_aggregate_deltas, p_player_deltas);
 END;
 $$;
@@ -226,7 +273,7 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  PERFORM public.assert_no_aggregate_rebuild();
+  PERFORM public.aggregate_rebuild_guard();
   RETURN public.apply_phase_aggregate_job_inner(p_job_id, p_game_id, p_aggregate_deltas, p_player_deltas);
 END;
 $$;
@@ -241,7 +288,7 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  PERFORM public.assert_no_aggregate_rebuild();
+  PERFORM public.aggregate_rebuild_guard();
   RETURN public.rollback_game_aggregates_inner(p_game_id, p_expected_applied_at, p_aggregate_deltas, p_player_deltas);
 END;
 $$;
@@ -256,7 +303,7 @@ LANGUAGE plpgsql
 SET search_path = public
 AS $$
 BEGIN
-  PERFORM public.assert_no_aggregate_rebuild();
+  PERFORM public.aggregate_rebuild_guard();
   RETURN public.rollback_phase_game_aggregates_inner(p_game_id, p_expected_applied_at, p_aggregate_deltas, p_player_deltas);
 END;
 $$;
@@ -280,7 +327,115 @@ COMMENT ON FUNCTION public.claim_phase_aggregate_jobs(integer) IS
   'CAS-427 fence wrapper: refuses (PT409) while an aggregate rebuild lock is held, then delegates to
    claim_phase_aggregate_jobs_inner. Service-role only.';
 
+-- The lock row is a global singleton, not league-owned: it joins the trash inventory as 'kept' (never
+-- captured for a trashed league, like the append-only logs).
+CREATE OR REPLACE FUNCTION public.league_trash__inventory()
+RETURNS TABLE (rel text, cls text, pred text)
+LANGUAGE sql IMMUTABLE SET search_path = public AS $$
+  SELECT * FROM (VALUES
+    ('seasons',                   'owned',   'id = $1'),
+    ('season_participants',       'owned',   'season_id = $1'),
+    ('season_groups',             'owned',   'season_id = $1'),
+    ('season_group_members',      'owned',   'season_id = $1'),
+    ('season_formats',            'owned',   'season_id = $1'),
+    ('format_relation_links',     'owned',   'season_id = $1'),
+    ('format_resource_items',     'owned',   'season_id = $1'),
+    ('format_action_submissions', 'owned',   'season_id = $1'),
+    ('format_event_log',          'owned',   'season_id = $1'),
+    ('format_flags',              'owned',   'season_id = $1'),
+    ('format_player_attrs',       'owned',   'season_id = $1'),
+    ('format_track_progress',     'owned',   'season_id = $1'),
+    ('format_checks',             'owned',   'season_id = $1'),
+    ('format_adjustments',        'owned',   'season_id = $1'),
+    ('format_challenges',         'owned',   'season_id = $1'),
+    ('format_notifications',      'owned',   'season_id = $1'),
+    ('format_rules',              'owned',   'season_id = $1'),
+    ('evolution_tiers',           'owned',   'season_id = $1'),
+    ('draft_tier_limits',         'owned',   'season_id = $1'),
+    ('draft_pool_entries',        'owned',   'season_id = $1'),
+    ('legacy_standings',          'owned',   'season_id = $1'),
+    ('epb_kill_credit_epochs',    'owned',   'season_id = $1'),
+    ('epb_token_grants',          'owned',   'season_id = $1'),
+    ('season_storylines',         'owned',   'season_id = $1'),
+    ('tournaments',               'owned',   'season_id = $1'),
+    ('tournament_participants',   'owned',   'tournament_id IN {phases}'),
+    ('tournament_groups',         'owned',   'tournament_id IN {phases}'),
+    ('tournament_group_members',  'owned',   'group_id IN {tgroups}'),
+    ('rounds',                    'owned',   'tournament_id IN {phases}'),
+    ('tournament_reports',        'owned',   'tournament_id IN {phases}'),
+    ('matches',                   'owned',   'tournament_id IN {phases}'),
+    ('match_outcomes',            'owned',   'match_id IN {matches}'),
+    ('games',                     'owned',   'match_id IN {matches}'),
+    ('battle_stats',              'owned',   'game_id IN {games}'),
+    ('match_analyses',            'owned',   'match_id IN {matches}'),
+    ('match_prep_analyses',       'owned',   'match_id IN {matches}'),
+    ('match_prep_teams',          'owned',   'match_id IN {matches}'),
+    ('match_proposals',           'owned',   'match_id IN {matches}'),
+    ('match_evolution_snapshots', 'owned',   'match_id IN {matches}'),
+    ('epb_animation_views',       'owned',   'match_id IN {matches}'),
+    ('broadcast_moments',         'owned',   'match_id IN {matches} OR game_id IN {games}'),
+    ('draft_pools',               'owned',   'season_id = $1'),
+    ('draft_participants',        'owned',   'draft_pool_id IN {pools}'),
+    ('draft_slots',               'owned',   'draft_pool_id IN {pools}'),
+    ('draft_picks',               'owned',   'draft_pool_id IN {pools}'),
+    ('draft_replay_events',       'owned',   'draft_pool_id IN {pools}'),
+    ('draft_line_restrictions',   'owned',   'draft_pool_id IN {pools}'),
+    ('redraft_slots',             'owned',   'season_id = $1 OR draft_pool_id IN {pools}'),
+    ('redraft_submissions',       'owned',   'draft_pool_id IN {pools}'),
+    ('evolution_tracker',         'owned',   'season_id = $1'),
+    ('evolution_events',          'owned',   'season_id = $1'),
+    ('evo_progress_log',          'owned',   'season_id = $1'),
+    ('epb_draft_token_purchases', 'owned',   'season_id = $1'),
+    ('epb_comeback_token_spends', 'owned',   'season_id = $1'),
+    ('redraft_history',           'owned',   'season_id = $1'),
+    ('redraft_trade_requests',    'owned',   'season_id = $1'),
+    ('teams',                     'owned',   'season_id = $1 OR tournament_id IN {phases} OR draft_pool_id IN {pools}'),
+    ('resource_admins',           'owned',   '(resource_type = ''season'' AND resource_id = $1) OR (resource_type = ''tournament'' AND resource_id IN {phases})'),
+    ('discord_webhooks',          'owned',   '(scope_type = ''season'' AND scope_id = $1) OR (scope_type = ''tournament'' AND scope_id IN {phases})'),
+    ('social_integrations',       'owned',   '(scope_type = ''season'' AND scope_id = $1) OR (scope_type = ''tournament'' AND scope_id IN {phases})'),
+    ('wiki_notes',                'owned',   '(scope_type = ''league'' AND scope_id = $1) OR (scope_type = ''tournament'' AND scope_id IN {phases})'),
+    ('wiki_note_reports',         'owned',   'note_id IN {notes}'),
+    ('aggregates',                'derived', '(scope_type = ''league'' AND scope_id = $1) OR (scope_type = ''tournament'' AND scope_id IN {phases})'),
+    ('player_aggregates',         'derived', '(scope_type = ''league'' AND scope_id = $1) OR (scope_type = ''tournament'' AND scope_id IN {phases})'),
+    ('aggregate_jobs',            'derived', 'game_id IN {games}'),
+    ('rating_history',            'derived', 'match_id IN {matches}'),
+    ('league_phases', 'owned', 'season_id = $1'),
+    ('phase_participants', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_groups', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_group_members', 'owned', 'group_id IN {phase_groups}'),
+    ('phase_rounds', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_reports', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_matches', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_match_outcomes', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_games', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_battle_stats', 'owned', 'game_id IN {phase_games}'),
+    ('phase_match_analyses', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_match_prep_analyses', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_match_prep_teams', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_match_proposals', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_match_evolution_snapshots', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_epb_animation_views', 'owned', 'match_id IN {phase_matches}'),
+    ('phase_broadcast_moments', 'owned', 'match_id IN {phase_matches} OR game_id IN {phase_games}'),
+    ('phase_teams', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_cast_sessions', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_admins', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_discord_webhooks', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_social_integrations', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_wiki_notes', 'owned', 'phase_id IN {native_phases}'),
+    ('phase_wiki_note_reports', 'owned', 'note_id IN {phase_notes}'),
+    ('phase_aggregates', 'derived', 'phase_id IN {native_phases}'),
+    ('phase_player_aggregates', 'derived', 'phase_id IN {native_phases}'),
+    ('phase_aggregate_jobs', 'derived', 'game_id IN {phase_games}'),
+    ('phase_rating_history', 'derived', 'match_id IN {phase_matches}'),
+    ('audit_log',                 'kept',    'false'),
+    ('draft_action_log',          'kept',    'false'),
+    ('aggregate_rebuild_lock',    'kept',    'false')
+  ) AS v(rel, cls, pred)
+$$;
+
+
 REVOKE ALL ON FUNCTION public.assert_no_aggregate_rebuild() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.aggregate_rebuild_guard() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.aggregate_rebuild_active() FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.claim_aggregate_rebuild_lock(text, text, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.heartbeat_aggregate_rebuild_lock(uuid, integer) FROM PUBLIC, anon, authenticated;
@@ -293,6 +448,7 @@ REVOKE ALL ON FUNCTION public.rollback_game_aggregates(uuid, timestamptz, jsonb,
 REVOKE ALL ON FUNCTION public.rollback_phase_game_aggregates(uuid, timestamptz, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
 
 GRANT EXECUTE ON FUNCTION public.assert_no_aggregate_rebuild() TO service_role;
+GRANT EXECUTE ON FUNCTION public.aggregate_rebuild_guard() TO service_role;
 GRANT EXECUTE ON FUNCTION public.aggregate_rebuild_active() TO service_role;
 GRANT EXECUTE ON FUNCTION public.claim_aggregate_rebuild_lock(text, text, integer) TO service_role;
 GRANT EXECUTE ON FUNCTION public.heartbeat_aggregate_rebuild_lock(uuid, integer) TO service_role;

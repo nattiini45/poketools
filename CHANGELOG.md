@@ -12,12 +12,15 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Upgrade notes
 
-- **Apply `20261124090000_aggregate_rebuild_lock.sql` BEFORE deploying the code.** It adds the `aggregate_rebuild_lock`
-  table and the rebuild-lock RPCs, and renames `claim_aggregate_jobs`, `claim_phase_aggregate_jobs`, `apply_aggregate_job`,
-  `apply_phase_aggregate_job`, `rollback_game_aggregates` and `rollback_phase_game_aggregates` to `*_inner` behind
-  same-signature wrappers fenced by the lock. Until it is applied, result writes (`recordGameResult`, `editGame`,
-  `deleteGame`) and admin aggregate rebuilds fail on the missing `assert_no_aggregate_rebuild` / `claim_*_rebuild_lock`
-  functions; the queue's apply/rollback RPCs keep working until the rename lands.
+
+- **Apply `20261124090000_aggregate_rebuild_lock.sql` BEFORE the follow-up change that wires it (CAS-427).** It adds
+  the `aggregate_rebuild_lock` table and the rebuild-lock RPCs, and renames `claim_aggregate_jobs`,
+  `claim_phase_aggregate_jobs`, `apply_aggregate_job`, `apply_phase_aggregate_job`, `rollback_game_aggregates` and
+  `rollback_phase_game_aggregates` to `*_inner` behind same-signature wrappers fenced by `assert_no_aggregate_rebuild()`.
+  On its own the migration is inert: the queue's claim/apply/rollback calls keep working through the wrappers, and the
+  fence only engages once a rebuild claims the lock. The code that claims the lock and pre-checks it on result writes
+  lands in the same release; deploying code first is safe only while this file is unapplied.
+
 
 - `20261123180000_tournaments_stage_order_seasonless.sql` adds a CHECK pinning `stage_order = 0` on season-less (standalone) tournaments. It is additive and has no order requirement relative to the code deploy; it fails its precheck if a season-less row with another value exists (none did on 2026-11-23).
 

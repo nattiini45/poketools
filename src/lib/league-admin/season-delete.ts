@@ -107,8 +107,8 @@ export const SEASON_DELETE_UNNAMED_OWNED: readonly string[] = ['seasons', 'legac
 export const SEASON_DELETE_DERIVED: readonly string[] = ['aggregates', 'player_aggregates', 'aggregate_jobs', 'rating_history',
   'phase_aggregates', 'phase_player_aggregates', 'phase_aggregate_jobs', 'phase_rating_history'];
 
-/** Append-only logs: a delete and a restore leave them untouched. */
-export const SEASON_DELETE_KEPT: readonly string[] = ['audit_log', 'draft_action_log'];
+/** Untouched by a delete and a restore: the append-only logs and the global rebuild-lock singleton. */
+export const SEASON_DELETE_KEPT: readonly string[] = ['aggregate_rebuild_lock', 'audit_log', 'draft_action_log'];
 
 /** Tables outside the league whose rows point into it; they stay, and lose the link until a restore. */
 export const SEASON_DELETE_UNLINKS: readonly string[] = ['cast_sessions', 'agent_suggestions', 'teams', 'phase_teams', 'player_streaks'];
