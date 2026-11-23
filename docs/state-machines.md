@@ -207,8 +207,8 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `claim` | `pending` | `processing` | queue | `supabase/migrations/20260723205115_fix_claim_aggregate_jobs.sql#claim_aggregate_jobs`<br>`src/lib/match/aggregate-queue.ts` | The worker (cron every 10 min, `after()`, the admin drain) claims pending rows with attempts left, FOR UPDATE SKIP LOCKED, and adds one attempt. |
-| `complete` | `processing` | `completed` | queue, admin | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job`<br>`src/lib/match/aggregate-queue.ts` | apply_aggregate_job completes the job in the transaction that adds the counts and sets the game marker; `completeJob` completes a job with nothing to apply (game gone, already counted, no stats). |
+| `claim` | `pending` | `processing` | queue | `supabase/migrations/20260723205115_fix_claim_aggregate_jobs.sql#claim_aggregate_jobs_inner`<br>`src/lib/match/aggregate-queue.ts` | The worker (cron every 10 min, `after()`, the admin drain) claims pending rows with attempts left, FOR UPDATE SKIP LOCKED, and adds one attempt. |
+| `complete` | `processing` | `completed` | queue, admin | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job_inner`<br>`src/lib/match/aggregate-queue.ts` | apply_aggregate_job completes the job in the transaction that adds the counts and sets the game marker; `completeJob` completes a job with nothing to apply (game gone, already counted, no stats). |
 | `retry` | `processing` | `pending` | queue | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#reclaim_stale_aggregate_jobs`<br>`src/lib/match/aggregate-queue.ts` | A failed run (`markJobFailed`) or a run idle for 5 minutes (reclaim) with attempts < max_attempts. |
 | `fail` | `processing` | `failed` | queue | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#reclaim_stale_aggregate_jobs`<br>`src/lib/match/aggregate-queue.ts` | The same two writers once attempts reach max_attempts: the game stays uncounted until a scope rebuild or a requeue. |
 | `requeue` | `failed` | `pending` | admin | `src/lib/match/aggregate-queue.ts`<br>`src/lib/reconcile/entity-delete-rebuild.ts` | A league restore rebuild puts the league's failed increment jobs back with attempts = 0 (`requeueFailedIncrementJobsForSeason`). |
@@ -768,8 +768,8 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `apply` | `uncounted` | `counted` | queue, admin | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job`<br>`src/lib/supabase/queries/aggregates.ts`<br>`src/lib/match/aggregate-queue.ts` | The queue worker, or an admin game edit re-applying the new stats; a counted game answers already_applied. |
-| `rollback` | `counted` | `uncounted` | admin | `supabase/migrations/20261018170000_aggregate_rollback_atomic.sql#rollback_game_aggregates`<br>`src/lib/supabase/queries/aggregates.ts`<br>`src/lib/pkmn/game-pipeline.ts` | Admin game edit, game delete or match reset; fenced on the marker the deltas were built under (marker_changed otherwise). |
+| `apply` | `uncounted` | `counted` | queue, admin | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job_inner`<br>`src/lib/supabase/queries/aggregates.ts`<br>`src/lib/match/aggregate-queue.ts` | The queue worker, or an admin game edit re-applying the new stats; a counted game answers already_applied. |
+| `rollback` | `counted` | `uncounted` | admin | `supabase/migrations/20261018170000_aggregate_rollback_atomic.sql#rollback_game_aggregates_inner`<br>`src/lib/supabase/queries/aggregates.ts`<br>`src/lib/pkmn/game-pipeline.ts` | Admin game edit, game delete or match reset; fenced on the marker the deltas were built under (marker_changed otherwise). |
 
 ## Game edit lease
 
@@ -1100,8 +1100,8 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `claim` | `pending` | `processing` | queue | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#claim_phase_aggregate_jobs` |  |
-| `complete` | `processing` | `completed` | queue, admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#apply_phase_aggregate_job`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `claim` | `pending` | `processing` | queue | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#claim_phase_aggregate_jobs_inner` |  |
+| `complete` | `processing` | `completed` | queue, admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#apply_phase_aggregate_job_inner`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
 | `retry` | `processing` | `pending` | queue | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#reclaim_stale_phase_aggregate_jobs`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
 | `fail` | `processing` | `failed` | queue | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#reclaim_stale_phase_aggregate_jobs`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
 | `requeue` | `failed` | `pending` | admin | `src/lib/league-phase/phase-aggregate-storage.ts` |  |
@@ -1126,8 +1126,8 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `apply` | `uncounted` | `counted` | queue, admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#apply_phase_aggregate_job`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
-| `rollback` | `counted` | `uncounted` | admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#rollback_phase_game_aggregates`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `apply` | `uncounted` | `counted` | queue, admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#apply_phase_aggregate_job_inner`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `rollback` | `counted` | `uncounted` | admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#rollback_phase_game_aggregates_inner`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
 
 ## Phase game edit lease
 

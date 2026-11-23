@@ -520,6 +520,7 @@ A deleted league is captured here and deleted from the live tables in one transa
 | `aggregates` | Pre-computed Pokémon usage per scope (4.10) |
 | `player_aggregates` | Pre-computed per-player usage |
 | `aggregate_jobs` | Queue of aggregate deltas, applied atomically by `apply_aggregate_job` |
+| `aggregate_rebuild_lock` | Singleton row coordinating scope aggregate rebuilds: fences the claim/apply/rollback RPCs of both stores while unexpired (CAS-427) |
 | `meta_usage_cache` | Imported Smogon usage per format |
 | `smogon_sample_sets` | Imported Smogon sample sets |
 | `player_ratings` | Current Glicko-2 rating per player |
