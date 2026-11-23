@@ -865,6 +865,36 @@ export type Database = {
           },
         ]
       }
+      aggregate_rebuild_lock: {
+        Row: {
+          acquired_at: string
+          expires_at: string
+          heartbeat_at: string
+          holder: string
+          id: number
+          scope_id: string | null
+          scope_type: string
+        }
+        Insert: {
+          acquired_at?: string
+          expires_at: string
+          heartbeat_at?: string
+          holder: string
+          id?: number
+          scope_id?: string | null
+          scope_type: string
+        }
+        Update: {
+          acquired_at?: string
+          expires_at?: string
+          heartbeat_at?: string
+          holder?: string
+          id?: number
+          scope_id?: string | null
+          scope_type?: string
+        }
+        Relationships: []
+      }
       aggregates: {
         Row: {
           id: string
@@ -8609,7 +8639,18 @@ export type Database = {
           stranded_pending: number
         }[]
       }
+      aggregate_rebuild_active: { Args: never; Returns: boolean }
+      aggregate_rebuild_guard: { Args: never; Returns: undefined }
       apply_aggregate_job: {
+        Args: {
+          p_aggregate_deltas: Json
+          p_game_id: string
+          p_job_id: string
+          p_player_deltas: Json
+        }
+        Returns: string
+      }
+      apply_aggregate_job_inner: {
         Args: {
           p_aggregate_deltas: Json
           p_game_id: string
@@ -8627,6 +8668,16 @@ export type Database = {
         }
         Returns: string
       }
+      apply_phase_aggregate_job_inner: {
+        Args: {
+          p_aggregate_deltas: Json
+          p_game_id: string
+          p_job_id: string
+          p_player_deltas: Json
+        }
+        Returns: string
+      }
+      assert_no_aggregate_rebuild: { Args: never; Returns: undefined }
       batch_decrement_aggregates: {
         Args: { p_deltas: Json }
         Returns: undefined
@@ -8719,6 +8770,37 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      claim_aggregate_jobs_inner: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          game_id: string
+          id: string
+          last_error: string | null
+          max_attempts: number
+          operation: string
+          processed_at: string | null
+          season_id: string | null
+          status: string
+          tournament_id: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "aggregate_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_aggregate_rebuild_lock: {
+        Args: {
+          p_scope_id: string
+          p_scope_type: string
+          p_ttl_seconds?: number
+        }
+        Returns: string
+      }
       claim_game_edit_lease: {
         Args: {
           p_expected_updated_at: string
@@ -8761,6 +8843,30 @@ export type Database = {
         }
       }
       claim_phase_aggregate_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          game_id: string
+          id: string
+          last_error: string | null
+          match_id: string
+          max_attempts: number
+          operation: string
+          phase_id: string
+          processed_at: string | null
+          season_id: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "phase_aggregate_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_phase_aggregate_jobs_inner: {
         Args: { p_limit?: number }
         Returns: {
           attempts: number
@@ -9679,6 +9785,10 @@ export type Database = {
         }
         Returns: number
       }
+      heartbeat_aggregate_rebuild_lock: {
+        Args: { p_holder: string; p_ttl_seconds?: number }
+        Returns: undefined
+      }
       increment_evolution_points: {
         Args: { p_amount?: number; p_tracker_id: string }
         Returns: undefined
@@ -10422,6 +10532,10 @@ export type Database = {
         }
         Returns: Json
       }
+      release_aggregate_rebuild_lock: {
+        Args: { p_holder: string }
+        Returns: undefined
+      }
       release_game_edit_lease: {
         Args: { p_game_id: string; p_token: string }
         Returns: boolean
@@ -10439,7 +10553,25 @@ export type Database = {
         }
         Returns: string
       }
+      rollback_game_aggregates_inner: {
+        Args: {
+          p_aggregate_deltas: Json
+          p_expected_applied_at: string
+          p_game_id: string
+          p_player_deltas: Json
+        }
+        Returns: string
+      }
       rollback_phase_game_aggregates: {
+        Args: {
+          p_aggregate_deltas: Json
+          p_expected_applied_at: string
+          p_game_id: string
+          p_player_deltas: Json
+        }
+        Returns: string
+      }
+      rollback_phase_game_aggregates_inner: {
         Args: {
           p_aggregate_deltas: Json
           p_expected_applied_at: string

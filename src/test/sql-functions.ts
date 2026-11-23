@@ -23,36 +23,50 @@ export interface SqlFunctionDefinition {
   readonly body: string;
 }
 
-export function lastSqlFunction(name: string): SqlFunctionDefinition {
-  const pattern = new RegExp(
-    String.raw`CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+"?public"?\."?${name}"?\s*\([\s\S]*?AS\s+\$\$([\s\S]*?)\$\$`,
-    'gi',
-  );
-  let found: SqlFunctionDefinition | null = null;
-  for (const [file, text] of migrations()) {
-    for (const match of text.matchAll(pattern)) {
-      found = {
-        file: `supabase/migrations/${file}`,
-        body: match[1]
-          .split('\n')
-          .map((line) => line.replace(/--.*$/, ''))
-          .join(' ')
-          .replace(/\s+/g, ' ')
-          .trim(),
-      };
+/** One replay pass: CREATE registers the latest definition, ALTER ... RENAME carries it to the new name. */
+const FUNCTION_EVENT = new RegExp(
+  String.raw`CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+"?public"?\."?([a-z0-9_]+)"?\s*\([\s\S]*?AS\s+\$\$([\s\S]*?)\$\$` +
+    String.raw`|ALTER\s+FUNCTION\s+"?public"?\."?([a-z0-9_]+)"?\s*\([^)]*\)\s+RENAME\s+TO\s+([a-z0-9_]+)`,
+  'gi',
+);
+
+let definitionsCache: Map<string, SqlFunctionDefinition> | null = null;
+const definitions = () =>
+  (definitionsCache ??= (() => {
+    const defs = new Map<string, SqlFunctionDefinition>();
+    for (const [file, text] of migrations()) {
+      for (const m of text.matchAll(FUNCTION_EVENT)) {
+        if (m[3] !== undefined) {
+          const def = defs.get(m[3]);
+          if (def) {
+            defs.delete(m[3]);
+            defs.set(m[4], def);
+          }
+          continue;
+        }
+        defs.set(m[1], {
+          file: `supabase/migrations/${file}`,
+          body: m[2]
+            .split('\n')
+            .map((line) => line.replace(/--.*$/, ''))
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim(),
+        });
+      }
     }
-  }
+    return defs;
+  })());
+
+export function lastSqlFunction(name: string): SqlFunctionDefinition {
+  const found = definitions().get(name);
   if (!found) throw new Error(`no migration defines public.${name}`);
   return found;
 }
 
 /** Names of every function a migration defines in schema public, each with its last definition. */
 export function allSqlFunctions(): Map<string, SqlFunctionDefinition> {
-  const names = new Set<string>();
-  for (const [, text] of migrations()) {
-    for (const m of text.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+"?public"?\."?([a-z0-9_]+)"?\s*\(/gi)) names.add(m[1]);
-  }
-  return new Map([...names].sort().map((name) => [name, lastSqlFunction(name)]));
+  return new Map([...definitions().keys()].sort().map((name) => [name, definitions().get(name)!]));
 }
 
 /** Every SQL writer (`path#function`) a machine names, with the transitions that name it. */

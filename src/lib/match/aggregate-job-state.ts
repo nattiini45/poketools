@@ -29,7 +29,9 @@ export const aggregateJobMachine = defineMachine({
       from: ['pending'],
       to: 'processing',
       actors: ['queue'],
-      writers: ['supabase/migrations/20260723205115_fix_claim_aggregate_jobs.sql#claim_aggregate_jobs', QUEUE],
+      // The fence wrapper (migration 20261124090000) owns the public name; the
+      // state move lives in the renamed *_inner function this file defined.
+      writers: ['supabase/migrations/20260723205115_fix_claim_aggregate_jobs.sql#claim_aggregate_jobs_inner', QUEUE],
       note: 'The worker (cron every 10 min, `after()`, the admin drain) claims pending rows with attempts left, FOR UPDATE SKIP LOCKED, and adds one attempt.',
     },
     {
@@ -37,7 +39,7 @@ export const aggregateJobMachine = defineMachine({
       from: ['processing'],
       to: 'completed',
       actors: ['queue', 'admin'],
-      writers: [`${APPLY_MIGRATION}#apply_aggregate_job`, QUEUE],
+      writers: [`${APPLY_MIGRATION}#apply_aggregate_job_inner`, QUEUE],
       note: 'apply_aggregate_job completes the job in the transaction that adds the counts and sets the game marker; `completeJob` completes a job with nothing to apply (game gone, already counted, no stats).',
     },
     {
