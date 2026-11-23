@@ -12,6 +12,10 @@ import type { AggregateScope } from '@/types/game';
 
 /** PostgREST error carrying the rebuild fence (migration 20261124090000). */
 export function isAggregateRebuildFence(error: unknown): boolean {
+  // The apply wrappers translate the raw PT409 before it reaches the queue,
+  // so the wrapped error is the fence too — otherwise a fenced apply falls
+  // through to storage.fail and the attempt refund never runs.
+  if (error instanceof AggregateRebuildInProgressError) return true;
   return (
     typeof error === 'object' &&
     error !== null &&
