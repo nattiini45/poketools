@@ -19,6 +19,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   `deleteGame`) and admin aggregate rebuilds fail on the missing `assert_no_aggregate_rebuild` / `claim_*_rebuild_lock`
   functions; the queue's apply/rollback RPCs keep working until the rename lands.
 
+- `20261123180000_tournaments_stage_order_seasonless.sql` adds a CHECK pinning `stage_order = 0` on season-less (standalone) tournaments. It is additive and has no order requirement relative to the code deploy; it fails its precheck if a season-less row with another value exists (none did on 2026-11-23).
+
 - **Native match/game workflows remain dormant.** The nine `2026111712*` migrations add phase-owned result writers and explicit mixed maintenance/projection adapters. Existing routes and cron stay legacy-bound and deploy without these files. Applying SQL or deploying this layer does not authorize activation or a production data move.
 
 - **Phase lifecycle persistence remains dormant.** The two `2026111711*` migrations add native phase lifecycle and format materialisation RPCs behind explicit adapters. Existing traffic still uses the legacy store and can deploy without these two files. Neither applying them nor deploying this layer authorizes enabling phase mode or moving production data; later match, ancillary and canonical-route layers must be ready first.
