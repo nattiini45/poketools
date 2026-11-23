@@ -8,6 +8,9 @@ test.describe('site nav layout', () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/');
       const nav = page.locator('#site-nav');
+      // A client navigation can briefly leave two layouts' navs mounted at once (CAS-433):
+      // toHaveCount auto-retries until the handoff settles; a persistent duplicate still fails.
+      await expect(nav).toHaveCount(1);
       await expect(nav).toBeVisible();
       const boxes = await nav.evaluate((el) =>
         [...el.querySelectorAll('a, button')]
