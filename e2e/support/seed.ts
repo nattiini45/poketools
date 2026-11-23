@@ -32,7 +32,7 @@ export async function ensureE2ELeague(): Promise<void> {
   let season = await db.from('seasons').select('id').eq('name', E2E_LEAGUE_NAME).limit(1).maybeSingle();
   if (season.error) throw new Error(`[e2e] could not read the e2e league: ${season.error.message}`);
   if (!season.data) {
-    season = await db
+    const created = await db
       .from('seasons')
       .insert({
         name: E2E_LEAGUE_NAME,
@@ -45,23 +45,25 @@ export async function ensureE2ELeague(): Promise<void> {
       })
       .select('id')
       .single();
-    if (season.error || !season.data) throw new Error(`[e2e] could not create the e2e league: ${season.error?.message ?? 'no row'}`);
+    if (created.error || !created.data) throw new Error(`[e2e] could not create the e2e league: ${created.error?.message ?? 'no row'}`);
+    season = created;
   }
+  const seasonId = season.data.id;
 
   let tournament = await db
     .from('tournaments')
     .select('id')
-    .eq('season_id', season.data.id)
+    .eq('season_id', seasonId)
     .eq('name', E2E_TOURNAMENT_NAME)
     .limit(1)
     .maybeSingle();
   if (tournament.error) throw new Error(`[e2e] could not read the e2e tournament: ${tournament.error.message}`);
   if (!tournament.data) {
-    tournament = await db
+    const created = await db
       .from('tournaments')
       .insert({
         name: E2E_TOURNAMENT_NAME,
-        season_id: season.data.id,
+        season_id: seasonId,
         bracket_type: 'round_robin',
         ruleset_id: rulesetId,
         best_of_default: 1,
@@ -73,38 +75,40 @@ export async function ensureE2ELeague(): Promise<void> {
       })
       .select('id')
       .single();
-    if (tournament.error || !tournament.data) throw new Error(`[e2e] could not create the e2e tournament: ${tournament.error?.message ?? 'no row'}`);
+    if (created.error || !created.data) throw new Error(`[e2e] could not create the e2e tournament: ${created.error?.message ?? 'no row'}`);
+    tournament = created;
   }
+  const tournamentId = tournament.data.id;
 
   const playerIds: string[] = [];
   for (let n = 1; n <= DEV_SEED_PLAYER_COUNT; n += 1) playerIds.push(await seedPlayerId(`Seed Player ${n}`));
 
-  const enrolled = await db.from('season_participants').select('player_id').eq('season_id', season.data.id);
+  const enrolled = await db.from('season_participants').select('player_id').eq('season_id', seasonId);
   if (enrolled.error) throw new Error(`[e2e] could not read the e2e league's enrolment: ${enrolled.error.message}`);
   const missing = playerIds.filter((id) => !(enrolled.data ?? []).some((row) => row.player_id === id));
   if (missing.length > 0) {
     const rows = await db
       .from('season_participants')
-      .insert(missing.map((player_id) => ({ season_id: season.data.id, player_id })));
+      .insert(missing.map((player_id) => ({ season_id: seasonId, player_id })));
     if (rows.error) throw new Error(`[e2e] could not enrol the e2e league: ${rows.error.message}`);
   }
 
-  const stageEnrolled = await db.from('tournament_participants').select('player_id').eq('tournament_id', tournament.data.id);
+  const stageEnrolled = await db.from('tournament_participants').select('player_id').eq('tournament_id', tournamentId);
   if (stageEnrolled.error) throw new Error(`[e2e] could not read the e2e tournament's enrolment: ${stageEnrolled.error.message}`);
   const stageMissing = playerIds.filter((id) => !(stageEnrolled.data ?? []).some((row) => row.player_id === id));
   if (stageMissing.length > 0) {
     const rows = await db
       .from('tournament_participants')
-      .insert(stageMissing.map((player_id) => ({ tournament_id: tournament.data.id, player_id })));
+      .insert(stageMissing.map((player_id) => ({ tournament_id: tournamentId, player_id })));
     if (rows.error) throw new Error(`[e2e] could not enrol the e2e tournament: ${rows.error.message}`);
   }
 
-  const rounds = await db.from('rounds').select('id').eq('tournament_id', tournament.data.id).limit(1);
+  const rounds = await db.from('rounds').select('id').eq('tournament_id', tournamentId).limit(1);
   if (rounds.error) throw new Error(`[e2e] could not read the e2e rounds: ${rounds.error.message}`);
   if ((rounds.data ?? []).length === 0) {
     const round = await db
       .from('rounds')
-      .insert({ tournament_id: tournament.data.id, name: 'Round 1', round_number: 1, best_of: 1 })
+      .insert({ tournament_id: tournamentId, name: 'Round 1', round_number: 1, best_of: 1 })
       .select('id')
       .single();
     if (round.error || !round.data) throw new Error(`[e2e] could not create the e2e round: ${round.error?.message ?? 'no row'}`);
