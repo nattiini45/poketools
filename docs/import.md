@@ -67,6 +67,13 @@ src/lib/import/
 ### `import-team`
 - `POST /api/import-team` — player team import (Showdown text or `pokepast.es` URL), optional `ruleset_id` validation; rate-limited 20/hour per player.
 
+
+## Testing
+
+- **Test Files — `src/lib/import/`**: `src/lib/import/__tests__/` (4 test files): `point-buy-xlsx.test.ts`, `utility-sheet-xlsx.test.ts`, `xlsx-upload.test.ts`, `xlsx.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).
+
 ## Related Modules
 - [Evolution Point Buy](./evolution-point-buy.md)
 - [Season](./season.md)

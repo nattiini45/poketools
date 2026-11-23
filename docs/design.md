@@ -432,6 +432,13 @@ Token usage in className:
   variable woff2; exposed as `--font-heading-face` / `--font-body-face`.
 - Every feature module — these are the lowest-level building blocks.
 
+
+## Testing
+
+- **Test Files — `src/lib/design/`**: `src/lib/design/__tests__/` (11 test files): `b-tokens.test.ts`, `component-inks.test.ts`, `frozen-pins.test.ts`, `frozen-scale.test.ts`, `site-palette-css.test.ts`, `site-palette-script.test.ts`, `site-palette-store.test.ts`, `site-palettes.test.ts`, `tailwind-status-tokens.test.ts`, `tokens.test.ts`, `type.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).
+
 ## Related Modules
 
 - Every module doc — all UI references back here for primitives.

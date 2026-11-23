@@ -124,6 +124,8 @@ Stored event-filter values remain compatible: native `phase_started` and `phase_
 Native dispatch tests mock phase reads, recipient resolution, outbound requests and card generation. They perform no database, Storage, image or provider requests.
 
 ## Testing
+
+- **Test Files — `src/lib/discord/`**: `src/lib/discord/__tests__/` (11 test files): `draft-embeds.test.ts`, `embeds-rating-milestone.test.ts`, `embeds.test.ts`, `fonts.test.ts`, `helpers.test.ts`, `match-card-image.test.tsx`, `notify.test.ts`, `phase-embeds.test.ts`, `phase-notify.test.ts`, `webhook-test.test.ts`, `webhook-view.test.ts`.
 - **Test Files**: `src/lib/discord/__tests__/webhook-test.test.ts`, `webhook-view.test.ts`; the route tests under `src/app/api/discord-webhooks/**/__tests__`; `src/components/discord/__tests__/webhook-test-client.test.ts`
 - **Testing Approach**: API route and integration validation; the test post mocks global `fetch`
 

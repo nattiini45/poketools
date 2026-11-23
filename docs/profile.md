@@ -54,6 +54,8 @@ const profile = await composePlayerProfile(playerId);
 ```
 
 ## Testing
+
+- **Test Files — `src/lib/profile/`**: `src/lib/profile/__tests__/` (3 test files): `compose.test.ts`, `historical-statistics.test.ts`, `redact.test.ts`.
 - **Test Files**: `src/lib/profile/__tests__/compose.test.ts` and `redact.test.ts` (the profile card allowlist)
 - **Testing Approach**: Unit tests of the composition and redaction; the profile pages and API routes have route and page tests next to them.
 

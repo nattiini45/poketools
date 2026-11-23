@@ -119,6 +119,8 @@ After validating that stream, the same transaction removes the player's obsolete
 The focused stream unit suite covers mixed replay, deduplication, ordering and retry. `rating-streak-streams.local.test.ts` opts in through `localStackOptIn('LOCAL_PHASE_RATING_STREAMS')`, requires a disposable phase-mode stack and never changes its storage generation.
 
 ## Testing
+
+- **Test Files — `src/lib/rating/`**: `src/lib/rating/__tests__/` (9 test files): `glicko2-preview.test.ts`, `glicko2.test.ts`, `rating-scope.test.ts`, `replay-order.test.ts`, `test-league-rebuild-port.test.ts`, `test-league-rebuild.test.ts`, `tiers.test.ts`, `updateRatings-rebuild.test.ts`, `updateRatings.test.ts`.
 - **Test Files**:
   - `src/lib/rating/__tests__/glicko2.test.ts` — pure Glicko-2 math (`glicko2Update`, `expectedScore`, `inflateRD`)
   - `src/lib/rating/__tests__/glicko2-preview.test.ts` — preview / next-game deltas

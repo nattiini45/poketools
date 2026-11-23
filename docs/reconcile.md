@@ -94,6 +94,13 @@ src/lib/reconcile/
 ### Evolution Points
 - `POST /api/seasons/[id]/evolution-points/recalculate` — rebuild evolution-point counters from persisted development events
 
+
+## Testing
+
+- **Test Files — `src/lib/reconcile/`**: `src/lib/reconcile/__tests__/` (6 test files): `entity-delete-rebuild.test.ts`, `evolution-rebuild.test.ts`, `kill-credit-ledger-migration.test.ts`, `reconcile-season-serialize.test.ts`, `reconcile-season.test.ts`, `reconcile-streaks.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).
+
 ## Related Modules
 - [Match](./match.md)
 - [Rating](./rating.md)

@@ -92,6 +92,13 @@ Written by the Ruleset Studio routes ([Ruleset Studio](./ruleset-studio.md#api))
 ## API Routes
 - `GET /api/admin/audit-log` — admin-only; parses query params via `auditLogQuerySchema`, returns `{ success, data }` with `{ entries, total, limit, offset }` or a 400 on validation failure.
 
+
+## Testing
+
+- **Test Files — `src/lib/audit/`**: `src/lib/audit/__tests__/` (5 test files): `agent-context.test.ts`, `game-match-id-index-migration.test.ts`, `log-strict.test.ts`, `log.test.ts`, `match-audit-queries.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).
+
 ## Related Modules
 - [Admin](./admin.md)
 - [Security Patterns](./security-patterns.md)

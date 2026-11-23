@@ -361,6 +361,14 @@ Backend-owned. All routes use the `{ success, data } | { success: false, error, 
 - `src/app/(public)/draft-preview/__tests__/` renders every scenario in EN and DE with `fetch` stubbed.
 - League groups: `src/lib/draft-ui/__tests__/group-pools.test.ts` (group selection), `src/components/draft-tool/shared/__tests__/GroupPoolPicker.test.tsx`, `src/lib/draft/__tests__/player-pool.test.ts`, the grouped cases in the `draft-room`, `redraft`, `api/drafts`, `api/seasons/[id]/tokens`, `api/validate-team` and dashboard team page tests, each next to an unchanged ungrouped case.
 
+
+## Testing
+
+- **Test Files — `src/lib/draft-ui/`**: `src/lib/draft-ui/__tests__/` (10 test files): `armed-confirm-table.test.ts`, `armed-confirm.test.ts`, `clock.test.ts`, `create-pool.test.ts`, `group-pools.test.ts`, `progress-display.test.tsx`, `reasons.test.ts`, `select-pool.test.ts`, `snapshot-adapter.test.ts`, `storage.test.ts`.
+- **Test Files — `src/lib/draft-finder/`**: `src/lib/draft-finder/__tests__/` (13 test files): `ability-defense.server.test.ts`, `build-index.server.test.ts`, `chips.test.ts`, `client-safe-imports.test.ts`, `engine.test.ts`, `evolution-sort.test.ts`, `filter-groups.test.ts`, `line-catalog.test.ts`, `reducer.test.ts`, `search.test.ts`, `sort.test.ts`, `tabs.test.ts`, `team-weakness.test.ts`.
+
+- **Running Tests**: `npx vitest run src/lib/<module>/__tests__` (the suite guards this doc).
+
 ## Related Modules
 - [Draft](./draft.md)
 - [Evolution Point Buy](./evolution-point-buy.md)

@@ -245,6 +245,9 @@ Optional: add your own tests under `src/format-packs/private/__tests__/`; the `p
 
 ## Testing
 
+
+- **Test Files — `src/lib/format-pack/`**: `src/lib/format-pack/__tests__/` (6 test files): `draft-kill-rate.test.ts`, `pack-contract.test.ts`, `pack-pkmn.server.test.ts`, `phase-contract.test.ts`, `price-group-labels.test.ts`, `rule-conflict-text.test.ts`.
+- **Test Files — `src/lib/pack-extensions/`**: `src/lib/pack-extensions/__tests__/` (1 test files): `pack-extensions.test.ts`.
 | Command | What runs |
 |---|---|
 | `npm test` | `app` (example pack) + `scripts`; plus `private-pack` when the private pack is present. |
