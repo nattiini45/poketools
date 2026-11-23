@@ -23,7 +23,7 @@ describe('aggregate job machine', () => {
 
   it('claim_aggregate_jobs: pending with attempts left → processing, one attempt added', () => {
     const t = transition('claim');
-    const { body } = lastSqlFunction('claim_aggregate_jobs');
+    const { body } = lastSqlFunction('claim_aggregate_jobs_inner');
     expect(t.from).toEqual(['pending']);
     expect(body).toContain(`WHERE status = '${t.from[0]}' AND attempts < max_attempts`);
     expect(body).toContain('FOR UPDATE SKIP LOCKED');
@@ -32,7 +32,7 @@ describe('aggregate job machine', () => {
 
   it('apply_aggregate_job: completes only a processing job, in the counting transaction', () => {
     const t = transition('complete');
-    const { body } = lastSqlFunction('apply_aggregate_job');
+    const { body } = lastSqlFunction('apply_aggregate_job_inner');
     expect(body).toContain(`SET status = '${t.to}', processed_at = now(), updated_at = now() WHERE id = p_job_id AND status = '${t.from[0]}'`);
     expect(t.from).toEqual(['processing']);
     expect(body).toContain("RETURN 'job_not_processing'");
