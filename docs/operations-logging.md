@@ -66,3 +66,5 @@ jq -c 'select(.digest == "1234567890") | {timestamp, path, method, routePath, er
 ```
 
 Query strings are cut from `path` because they can carry one-time tokens (`?token_hash=...`). A path segment can still be a secret (a share token in `/teams/shared/<token>`): treat the log like the access log of the deployment.
+
+Local dev only: the `next dev` access log on stdout is a raw line per request and prints the full URL **with** its query string, so a `?token_hash=` can land in a terminal or a pasted log — the structured logger's redaction does not apply to it (production Vercel logs are unaffected). To check a request, read the JSON line for it instead of the access line, and never paste raw dev stdout into an issue.

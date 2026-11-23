@@ -33,7 +33,7 @@ const escapeRe = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g,
 /** Whether an opening tag carries the `disabled` attribute (not the `disabled:` utility classes). */
 const isDisabled = (tag: string): boolean => /\sdisabled(=""|\s|>)/.test(tag);
 
-/** The id the control labelled 	ext carries: the primitives generate it, so a test follows the label's or. */
+/** The id the control labelled 	ext carries: the primitives generate it, so a test follows the label's for. */
 function idForLabel(html: string, text: string): string {
   const match = html.match(new RegExp('<label for="([^"]+)"[^>]*>' + escapeRe(text) + '</label>'));
   expect(match).not.toBeNull();

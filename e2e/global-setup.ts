@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { assertLoopbackUrl } from '../src/test/local-stack';
 import { localStack } from './support/stack';
+import { ensureE2ELeague } from './support/seed';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -29,4 +30,7 @@ export default async function globalSetup(): Promise<void> {
   if (seed.status !== 0) {
     throw new Error(`[e2e] npm run dev:seed failed:\n${seed.stdout}\n${seed.stderr}`);
   }
+
+  // The specs' own league, so their writes never touch the dev-seed league (issue #145).
+  await ensureE2ELeague();
 }
