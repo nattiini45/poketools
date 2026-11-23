@@ -29,9 +29,10 @@ export async function ensureE2ELeague(): Promise<void> {
   }
   const rulesetId = devStage.data.ruleset_id;
 
-  let season = await db.from('seasons').select('id').eq('name', E2E_LEAGUE_NAME).limit(1).maybeSingle();
+  const season = await db.from('seasons').select('id').eq('name', E2E_LEAGUE_NAME).limit(1).maybeSingle();
   if (season.error) throw new Error(`[e2e] could not read the e2e league: ${season.error.message}`);
-  if (!season.data) {
+  let seasonId = season.data?.id;
+  if (seasonId === undefined) {
     const created = await db
       .from('seasons')
       .insert({
@@ -46,11 +47,10 @@ export async function ensureE2ELeague(): Promise<void> {
       .select('id')
       .single();
     if (created.error || !created.data) throw new Error(`[e2e] could not create the e2e league: ${created.error?.message ?? 'no row'}`);
-    season = created;
+    seasonId = created.data.id;
   }
-  const seasonId = season.data.id;
 
-  let tournament = await db
+  const tournament = await db
     .from('tournaments')
     .select('id')
     .eq('season_id', seasonId)
@@ -58,7 +58,8 @@ export async function ensureE2ELeague(): Promise<void> {
     .limit(1)
     .maybeSingle();
   if (tournament.error) throw new Error(`[e2e] could not read the e2e tournament: ${tournament.error.message}`);
-  if (!tournament.data) {
+  let tournamentId = tournament.data?.id;
+  if (tournamentId === undefined) {
     const created = await db
       .from('tournaments')
       .insert({
@@ -76,9 +77,8 @@ export async function ensureE2ELeague(): Promise<void> {
       .select('id')
       .single();
     if (created.error || !created.data) throw new Error(`[e2e] could not create the e2e tournament: ${created.error?.message ?? 'no row'}`);
-    tournament = created;
+    tournamentId = created.data.id;
   }
-  const tournamentId = tournament.data.id;
 
   const playerIds: string[] = [];
   for (let n = 1; n <= DEV_SEED_PLAYER_COUNT; n += 1) playerIds.push(await seedPlayerId(`Seed Player ${n}`));
