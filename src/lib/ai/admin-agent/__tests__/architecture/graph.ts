@@ -10,8 +10,9 @@
  *
  * Specifiers that are not files of this repository (packages, `next/*`, `node:*`) are leaves: not followed, not listed.
  */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
+import { sourceFiles } from '@/test/file-walk';
 
 export const REPO_ROOT = path.resolve(__dirname, '../../../../../..');
 export const SRC_ROOT = path.join(REPO_ROOT, 'src');
@@ -146,20 +147,9 @@ export function findPath(graph: Graph, entries: readonly string[], hit: (file: s
 
 export const relFromRepo = (file: string): string => path.relative(REPO_ROOT, file).split(path.sep).join('/');
 
-/** Every file under `dir` for which `include` holds (relative to the repository, forward slashes), skipping `node_modules`. */
+/** Every file under `dir` for which `include` holds (relative to the repository, forward slashes); the shared cached walker (`src/test/file-walk.ts`, issue #144). */
 export function walkFiles(dir: string, include: (rel: string) => boolean): string[] {
-  const out: string[] = [];
-  const visit = (current: string): void => {
-    if (!existsSync(current)) return;
-    for (const name of readdirSync(current)) {
-      const full = path.join(current, name);
-      if (name === 'node_modules' || name === '.next') continue;
-      if (statSync(full).isDirectory()) visit(full);
-      else if (include(relFromRepo(full))) out.push(full);
-    }
-  };
-  visit(dir);
-  return out;
+  return sourceFiles(dir, include);
 }
 
 /** Whether a repository-relative path is test code or a test helper. */

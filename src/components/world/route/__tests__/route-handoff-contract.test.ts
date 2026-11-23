@@ -1,7 +1,8 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { sourceFiles, sourceText } from '@/test/file-walk';
 import { BALL_TIMING } from '@/lib/route-world/ball-loader-state';
 import { inReducedMotion, keyframesOf, parseCssRules, readGlobalsCss, stripCssComments, type CssRule } from '@/test/css-rules';
 
@@ -43,41 +44,17 @@ import { inReducedMotion, keyframesOf, parseCssRules, readGlobalsCss, stripCssCo
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const SRC = join(HERE, '..', '..', '..', '..');
 
-// ENGINE-A4: the src/ walk and its reads are cached once per file. Walked and
-// re-read per test, they took 5-78 s under a loaded full suite (timeouts);
-// the tests below also carry an explicit FILE_WALK_TIMEOUT_MS.
+// ENGINE-A4: the src/ walk and its reads go through the shared cached walker
+// (`src/test/file-walk.ts`, issue #144): each dir is enumerated once per
+// process and each file's text is read once per fresh checkout however many
+// scanning tests need it. 30 s remains the backstop for that one-time read
+// of the whole tree under a loaded full suite.
 const FILE_WALK_TIMEOUT_MS = 30_000;
-const texts = new Map<string, string>();
-function read(path: string): string {
-  let text = texts.get(path);
-  if (text === undefined) {
-    text = readFileSync(path, 'utf8');
-    texts.set(path, text);
-  }
-  return text;
-}
-
-const walked = new Map<string, string[]>();
-function allFiles(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const path = join(dir, entry);
-    if (statSync(path).isDirectory()) {
-      if (entry === 'node_modules' || entry === '__tests__') continue;
-      allFiles(path, out);
-    } else {
-      out.push(path);
-    }
-  }
-  return out;
-}
+const read = sourceText;
+const NO_TESTS = (rel: string) => !rel.split('/').includes('__tests__');
 
 function walk(dir: string, match: (path: string) => boolean): string[] {
-  let files = walked.get(dir);
-  if (files === undefined) {
-    files = allFiles(dir);
-    walked.set(dir, files);
-  }
-  return files.filter(match);
+  return sourceFiles(dir, (rel) => NO_TESTS(rel) && match(rel));
 }
 
 /** Every `@keyframes name { … }` block → the set of properties its frames declare. */
