@@ -507,9 +507,13 @@ describe('docs hold no control characters', () => {
     // { match: (f) => f === 'path/to/fixture.test.ts', reason: 'why the raw character is the fixture' },
   ];
   it('no source file carries one (comments, regexes, strings alike)', () => {
+    // Git pathspec globs do not expand {a,b} braces: one pattern per extension.
     const bad = publicFiles(
-      ':(glob)src/**/*.{ts,tsx,mts}',
-      ':(glob)scripts/**/*.{mjs,ts}',
+      ':(glob)src/**/*.ts',
+      ':(glob)src/**/*.tsx',
+      ':(glob)src/**/*.mts',
+      ':(glob)scripts/**/*.ts',
+      ':(glob)scripts/**/*.mjs',
       ':(glob)e2e/**/*.ts',
       ':(glob)supabase/migrations/*.sql',
     ).filter((f) => !CONTROL_SOURCE_EXEMPT.some((e) => e.match(f)) && CONTROL.test(read(f)));
