@@ -5,6 +5,13 @@ test.describe('anonymous visitor: public pages', () => {
   test('home page lists the seeded league', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { level: 1, name: 'PokéTools' })).toBeVisible();
+    // `/` keeps only the three newest leagues, so it asserts a league link exists — the named one is checked on `/leagues`.
+    await expect(page.getByRole('link', { name: /League/ }).first()).toBeVisible();
+  });
+
+  test('league index lists the league', async ({ page }) => {
+    // `/leagues` lists every league; `/` keeps only its three newest, so the named-link assertion lives here.
+    await page.goto('/leagues');
     await expect(page.getByRole('link', { name: E2E_LEAGUE_NAME }).first()).toBeVisible();
   });
 
