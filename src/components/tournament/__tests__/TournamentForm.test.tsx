@@ -26,7 +26,7 @@ const escapeRe = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g,
 const isDisabled = (tag: string): boolean => /\sdisabled(=""|\s|>)/.test(tag);
 
 /** The opening tag of the element with the given id. */
-/** The id the control labelled 	ext carries: the primitives generate it, so a test follows the label's or. */
+/** The id the control labelled text carries: the primitives generate it, so a test follows the label's for. */
 function idForLabel(html: string, text: string): string {
   const match = html.match(new RegExp('<label for="([^"]+)"[^>]*>' + escapeRe(text) + '</label>'));
   expect(match).not.toBeNull();

@@ -515,7 +515,7 @@ describe('20261106090000 challenges', () => {
     // A BEFORE INSERT trigger on rounds or matches would also refuse the league recycle bin restoring a completed league, the dev
     // seed, the bracket materialisation after an admin's result edit and the bracket regeneration. The guard lives in round_write,
     // which only the three round generators call.
-    expect(text).not.toMatch(/CREATE TRIGGER[^;]*ON public\.(rounds|matches)/);
+    expect(text).not.toMatch(/CREATE TRIGGER[^;]*ON public\.(rounds|matches)\b/);
   });
 
   it('grants round_write and round_delete to service_role only', () => {

@@ -20,7 +20,7 @@ vi.mock('@/lib/supabase/queries/cast-sessions', () => ({
 vi.mock('@/lib/supabase/queries/phase-cast-sessions', () => ({ getPhaseCastSessionById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
 
-// The limiter decision is covered in roadcast/__tests__/overlay-limits.test.ts.
+// The limiter decision is covered in broadcast/__tests__/overlay-limits.test.ts.
 vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
   checkPublicRateLimit: vi.fn(async () => ({ allowed: true, remaining: 1, retryAfterSeconds: 0 })),

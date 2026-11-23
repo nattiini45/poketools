@@ -69,7 +69,7 @@ vi.mock('@/lib/pkmn/sprite-styles', () => ({
   siteSpriteUrl: vi.fn((name: string) => `https://sprites/${name}.png`),
 }));
 
-// The limiter decision is covered in roadcast/__tests__/overlay-limits.test.ts.
+// The limiter decision is covered in broadcast/__tests__/overlay-limits.test.ts.
 vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
   checkPublicRateLimit: vi.fn(async () => ({ allowed: true, remaining: 1, retryAfterSeconds: 0 })),

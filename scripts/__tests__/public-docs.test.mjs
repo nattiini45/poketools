@@ -499,6 +499,27 @@ describe('docs hold no control characters', () => {
     expect(bad).toEqual([]);
   });
 
+  // Issue #145: a stray control character corrupts a source comment the same way it corrupts a doc
+  // (real cases: a raw backspace for a word-boundary, a form feed inside a comment). Deliberate
+  // fixtures (a file whose point is to feed a raw control character to the code under test) go on
+  // the exempt list with their reason; a `\u0007` escape in source is ASCII text and never matches.
+  const CONTROL_SOURCE_EXEMPT = [
+    // { match: (f) => f === 'path/to/fixture.test.ts', reason: 'why the raw character is the fixture' },
+  ];
+  it('no source file carries one (comments, regexes, strings alike)', () => {
+    // Git pathspec globs do not expand {a,b} braces: one pattern per extension.
+    const bad = publicFiles(
+      ':(glob)src/**/*.ts',
+      ':(glob)src/**/*.tsx',
+      ':(glob)src/**/*.mts',
+      ':(glob)scripts/**/*.ts',
+      ':(glob)scripts/**/*.mjs',
+      ':(glob)e2e/**/*.ts',
+      ':(glob)supabase/migrations/*.sql',
+    ).filter((f) => !CONTROL_SOURCE_EXEMPT.some((e) => e.match(f)) && CONTROL.test(read(f)));
+    expect(bad).toEqual([]);
+  });
+
   it('flags a planted BEL character', () => {
     expect(CONTROL.test('[\u0007i-agent.md](./ai-agent.md)')).toBe(true);
     expect(CONTROL.test('line one\r\nline two\tcolumn')).toBe(false);

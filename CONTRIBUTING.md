@@ -48,7 +48,7 @@ Prerequisites, all local (nothing reaches a hosted Supabase project):
 
 1. `npx supabase start`, then `npx supabase migration up --local` (or `npx supabase db reset --local`). The stack must be running; Mailpit is on http://127.0.0.1:54324.
 2. `npm run build:e2e`: a production build against the local stack with the local asset mirrors and the example format pack. Rerun it after you change app code; the suite serves `.next` as it finds it.
-3. `npm run test:e2e`. The suite starts its own server on port 3152 (`E2E_PORT` changes it; a server already there is never reused), runs `npm run dev:seed` once (idempotent) and uses the seeded league and the seeded logins (`seed-player-1@poketools.test` to `seed-player-8@poketools.test`, `local-admin@poketools.test`, all with the seed password). Discord is unset, so sign-in is email and password.
+3. `npm run test:e2e`. The suite starts its own server on port 3152 (`E2E_PORT` changes it; a server already there is never reused), runs `npm run dev:seed` once (idempotent) and uses the seeded logins (`seed-player-1@poketools.test` to `seed-player-8@poketools.test`, `local-admin@poketools.test`, all with the seed password). The league the specs write to is the suite's own `E2E League` (`e2e/support/seed.ts` `ensureE2ELeague`), created in the global setup from the seeded players and rulesets — the dev seed's `Dev Seed League` is local-development data that the dev-seed tests may delete and reset, so the suite never touches it. Discord is unset, so sign-in is email and password.
 
 Run one spec, or keep a trace of a passing run, and open it in the trace viewer:
 

@@ -132,7 +132,7 @@ npm run test:watch # Run tests in watch mode
 ```
 
 Notes:
-- `npm run lint` covers `src/` and `scripts/` and is not bundled into `npm run build`. `npm run typecheck` runs `tsc --noEmit`; `npm run typecheck:example` type-checks against the example format pack, as CI does.
+- `npm run lint` covers `src/` and `scripts/` and is not bundled into `npm run build`. `npm run typecheck` drops the generated `.next/types` validators first (a deleted route would otherwise fail the check on a path that no longer exists) and then runs `tsc --noEmit`; `npm run typecheck:example` type-checks against the example format pack, as CI does.
 
 ### Testing
 
