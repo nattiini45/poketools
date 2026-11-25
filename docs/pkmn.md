@@ -66,7 +66,10 @@ src/lib/pkmn/
 - **File**: `dex.ts`
 - **Purpose**: Unified generation-backed lookup/search/legality helpers
 - **Key Methods**: `getGeneration()`, `getSpecies()`, `getMove()`, `getItem()`, `validateSetLegality()`
-- **Generations rule and its one exception.** Everything goes through `new Generations(Dex)` (`getGeneration`). `listNationalSpecies()`, `listNationalMoves()` and `listNationalItems()` read `Dex.forGen(gen)` instead, because a generation's National Dex universe includes past entries (Mega Evolutions, Primal formes, Z-crystals, moves a generation dropped) that the `Generations` wrapper hides. The ruleset catalog and the preset resolution use them.
+- **Generations rule and its exceptions.** Everything goes through `new Generations(Dex)` (`getGeneration`). Three families read `Dex.forGen(gen)` instead:
+  - **The National Dex family** — `listNationalSpecies()`, `listNationalMoves()`, `listNationalItems()`, `listNationalAbilities()` and their single-entry counterparts `getNationalSpecies()`, `getNationalMove()`, `getNationalItem()`, `getNationalAbility()`. A generation's National Dex universe includes past entries (Mega Evolutions, Primal formes, Z-crystals, moves a generation dropped) that the `Generations` wrapper hides. The ruleset catalog and the preset resolution use them (`dex-national.test.ts` pins the universe).
+  - **`getRawEntity()`** — reads the raw dex whatever its `isNonstandard` mark, including `Future` entries (unreleased Mega Stones) that neither the wrapper nor the National Dex universe has. For a caller whose own list names the entry (the Champions roster).
+  - **`getBattleOnlySpeciesNatDex()`** — the `Generations` tables exclude Gigantamax formes entirely; the raw dex table keeps them, so the battle-only resolver falls back to it for that class (issue #141).
 
 ### Stat Calculator
 - **File**: `stat-calc.ts`
