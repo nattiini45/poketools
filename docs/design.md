@@ -43,6 +43,17 @@ src/lib/ui/use-client-table.ts # Client-side sort + pagination hook for data tab
 src/app/globals.css          # Tailwind 4 entry (@theme: CSS vars → utilities), CSS custom properties (--poke-*, ShadCN semantic bridge)
 src/app/tailwind-base.css    # Tailwind 3.4's preflight, the site's base layer (Tailwind 4's preflight is not imported)
 src/components/ui/           # primitive component library (see below)
+
+src/lib/design/              # The design system's TypeScript side: tokens, palettes, frozen surfaces
+├── tokens.ts                # Design tokens as TS constants (sunlit values) for computed styles and charts
+├── type.ts                  # Direction B type roles (redesign F3): display/title/… weights and faces
+├── site-palettes.ts         # The per-device site palettes (light/dark × palette) next to the theme attribute
+├── site-palette-tokens.ts   # Resolved token mirror of the palettes for tests, as the browser computes them
+├── site-palette-store.ts    # The viewer's palette pick: localStorage, applied as <html data-palette>
+├── site-palette-script.ts   # Pre-paint head script: lands the stored pick before first paint
+├── frozen-scale.ts          # The frozen-root rem→px resolution; generates src/app/frozen-scale.css
+├── frozen-surfaces.ts       # Paths of the frozen surfaces: the redesign guardrails skip them
+└── vendored.ts              # Paths of the vendored @fluid primitives: upstream code the guards skip
 ```
 
 ShadCN semantic tokens (`--background`, `--primary`, `--border`, …) are mapped to

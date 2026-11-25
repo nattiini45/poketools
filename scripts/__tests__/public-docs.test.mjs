@@ -655,10 +655,18 @@ export function treeRoots(block) {
     .filter(Boolean);
 }
 
-/** The modules a doc is answerable for: its own name, or the ones DOC_MODULES lists, when its tree has their roots. */
+/**
+ * The modules a doc is answerable for: its own name, or the ones DOC_MODULES lists, when its tree
+ * has their roots. A doc whose tree roots nothing at all falls back to its own candidate list
+ * (issue #358 — docs/design.md's tree lists only non-module lines, so without the fallback the
+ * file-structure check dropped the doc while the testing check still held it answerable; the two
+ * halves of the guard now agree on which docs are module docs).
+ */
 export function ownedModules(docName, block) {
+  const candidates = DOC_MODULES[docName] ?? [docName];
   const roots = new Set(treeRoots(block));
-  return (DOC_MODULES[docName] ?? [docName]).filter((m) => roots.has(m));
+  if (roots.size === 0) return candidates;
+  return candidates.filter((m) => roots.has(m));
 }
 
 const globToRegExp = (g) => new RegExp(`^${g.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[\\w.-]*')}$`);
