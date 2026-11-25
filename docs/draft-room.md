@@ -96,7 +96,8 @@ src/components/draft-admin/           # DraftControlPanel, RoomAdminSheet (the r
                                       #   InstanceConfigForm, PenaltyStageEditor, PickCorrectionTable,
                                       #   RedraftPhaseManager, TokenAdminSummary, DraftAuditViewer, admin-actions.ts
 src/components/broadcast/overlays/    # DraftViewer, DraftPickReveal, DraftReplayPlayer
-src/lib/draft-room/trainer-config.ts  # TrainerConfig + avatar presets
+src/lib/draft-room/                     # Trainer avatar configuration
+└── trainer-config.ts                   # TrainerConfig + avatar presets
 
 src/lib/draft/                        # Engine contracts used by the UI (backend-owned)
 ├── snapshot.ts                       # getDraftSnapshot / toDraftSnapshotDTO / toMyTurnDTO (server)

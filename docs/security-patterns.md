@@ -122,6 +122,17 @@ Request-body schemas are Zod, in `src/lib/validation/schemas.ts` ([`validation.m
 
 6. **UUID path segments** — a dynamic segment that must be a UUID is checked before any query: `const invalid = rejectInvalidPathId(id, 'INVALID_SEASON_ID'); if (invalid) return invalid;` (`src/lib/api/invalid-path-id.ts`). A malformed id names no row, so the answer is **404** with the resource's catalogued `INVALID_<NOUN>_ID` code; without the guard Postgres rejects the non-UUID filter and the route answers 500. Every API route with a UUID path segment carries it, in every handler (GET and the write methods), except the exclusions named in the header of `src/app/api/__tests__/path-id-guards.test.ts`: segments that are not UUIDs (`[name]`, `[species]`, `[pokemon]`, `[token]`, `[...nextauth]`), handlers that read no id (`drafts/[id]/favorites` GET/PUT, and the retired `seasons/[id]/draft-tokens` POST, `seasons/[id]/kill-tokens` GET/POST and `seasons/[id]/redraft` POST, which answer 410 whatever the id), a UUID that arrives as a query parameter (`drafts/route.ts`, guarded in its own test) and any route that header still lists as not yet swept. The shared guard tests pin the `INVALID_*_ID` guards: every guarded public GET is listed in `src/app/api/__tests__/public-path-id-guards.test.ts`, and every guarded handler behind an auth guard in `src/app/api/__tests__/path-id-guards.test.ts`, the league groups (`seasons/[id]/groups/**`) and phase groups (`seasons/[id]/phases/[phaseId]/groups/**`) routes included; a new route adds itself to one of them. Draft routes keep their own convention: their own uuid check, `requireDraftAdmin` or `getQueuePool` answer a malformed pool id with `POOL_NOT_FOUND` (404) before any query, and every such handler is pinned in the shared test (`drafts/[id]` GET/PATCH/DELETE, `state`, `my-turn`, `audit`, `config`, `end`, `extensions`, `free-order`, `pause`, `start`, `picks` GET/POST, `redraft`, `redraft/publish`, `redraft/submission` GET/PUT, `redraft/submissions`, `undo`, `replay-events` POST; the public `replay-events` GET is in the public guard test). A draft route's other segments (`pickId`, `playerId`, `redraftSlotId`) use the `INVALID_*_ID` guard and are in the shared test. The guard runs after the identity guard (`requirePlayer` / `requireAdmin` …), before any query and, where the handler allows it, before the body is parsed; every draft route does (a malformed pool id with a malformed body answers 404). `requireResourceAdmin(type, id)` refuses a malformed season or tournament id itself with the same 404 (`INVALID_SEASON_ID` / `INVALID_TOURNAMENT_ID`, site admins included). A UUID **query** parameter that is malformed is a 400 `INVALID_PARAM` with `params.name`, with one exception: `GET /api/drafts?season_id=` treats the season id like a path segment and answers 404 `INVALID_SEASON_ID` before the identity guard (the answer is the same for everyone, so it reveals nothing; pinned in `path-id-guards.test.ts`).
 
+## File Structure
+
+```
+src/lib/security/
+└── csp-report.ts    # What POST /api/csp-report keeps of a CSP violation report: one short JSON line, nothing stored
+```
+
+## Testing
+
+- **Test Files — `src/lib/security/`**: `src/lib/security/__tests__/` (4 test files): `csp-policy.test.ts`, `csp-report.test.ts`, `next-config-headers.test.ts`, `render-nonce.test.ts`.
+
 ## Related
 
 - [`AGENTS.md`](../AGENTS.md) — always-needed security subset and never-do list.

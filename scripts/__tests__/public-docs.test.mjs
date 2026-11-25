@@ -639,6 +639,8 @@ const DOC_MODULES = {
   'draft-room': ['draft-room', 'draft-ui', 'draft-finder'],
   'format-packs': ['format-pack', 'pack-extensions'],
   'season': ['season', 'league-trash'],
+  'visual-harness': ['visual-seed'],
+  'security-patterns': ['security'],
 };
 
 /**
