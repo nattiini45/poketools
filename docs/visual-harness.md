@@ -2,6 +2,17 @@
 
 Module doc for `scripts/visual/`. It proves that a change leaves the frozen surfaces pixel-identical, and it captures every other surface for review. The redesign (one PR per step: Tailwind 4, tokens, fonts, primitives) runs it on every PR.
 
+## File Structure
+
+```
+src/lib/visual-seed/     # The deterministic seed the frozen surfaces render
+├── fixtures.ts          # The Pokémon the seed writes: Gen 9 OU teams and the EvoLiga EPB lines
+├── ids.ts               # Every fixed id and timestamp the seed writes (mirrored to seed-ids.json)
+└── seed.ts              # The seed itself: fixed-id leagues, matches, a draft and a Cast Studio session
+```
+
+The harness itself lives in `scripts/visual/` (`run.mjs`, `capture.mjs`, `compare.mjs`, `lib.mjs`, the manifests); this module is only the seed.
+
 ## What it captures
 
 Two manifests, both expanded into one job per page load (target × matrix × viewport × theme):
@@ -81,3 +92,9 @@ Add an entry to `frozen.json`: `id`, `url` (`{name}` placeholders come from the 
 
 - The WebGL route tier: GPU output is not bit-stable across machines. `scripts/capture-route.mjs` remains the tool for route-tier stills; the DOM it draws over the canvas (HUD, Station Card, focus panel) is covered here through the lite tier and the league pages.
 - The private format pack: captures run with the example pack, as CI does. A maintainer run with the companion attached compares the same way (`FORMAT_PACK` stays `example` in the harness; change it locally to capture the private pack).
+
+## Testing
+
+- **Test Files — `src/lib/visual-seed/`**: `src/lib/visual-seed/__tests__/` (1 test file): `ids.test.ts` — keeps `ids.ts` and `scripts/visual/seed-ids.json` equal.
+- **Harness determinism proof**: two runs on an unchanged tree give zero diff (see Determinism).
+

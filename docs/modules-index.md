@@ -20,7 +20,7 @@ This is the central documentation index for all major PokéTools modules.
 - **Database (Supabase)** — Typed persistence and query layer. See [Supabase](./supabase.md); backups, restore and lock-safe migrations: [Operations: Backups](./operations-backup.md). Server logs, request ids and the error digest: [Operations: Logging](./operations-logging.md).
 - **Tournament** — Pairings, standings, advancement, match-state validation. See [Tournament](./tournament.md).
 - **League phase storage** — The league phase's own data model (`src/lib/league-phase`): phase-owned storage ports, services, state machines, round/bracket writers and page data. See [League Phase](./league-phase.md); the boundary, storage-generation machine and cutover: [Phase-owned storage](./phase-separation.md).
-- **State machines** — Every status, phase or flag combination that moves through states, defined once with `defineMachine` (`src/lib/state-machine`): legal transitions per actor, `assertTransition`, compare-and-set guards, UI actions. Generated reference with a diagram per machine: [State Machines](./state-machines.md); decision: [ADR 0004](./adr/0004-explicit-state-machines.md).
+- **State machines** — Every status, phase or flag combination that moves through states, defined once with `defineMachine` (`src/lib/state-machine`): legal transitions per actor, `assertTransition`, compare-and-set guards, UI actions. Module: [State Machine](./state-machine.md); generated reference with a diagram per machine: [State Machines](./state-machines.md); decision: [ADR 0004](./adr/0004-explicit-state-machines.md).
 - **Draft** — Draft pools, picks, and evo-league helpers. See [Draft](./draft.md).
 - **Evolution Point Buy** — EPB format engine (mechanics only): point-buy lists, progress sources and tokens, redraft, format gating; the league's numbers and rulings come from the active format pack. See [Evolution Point Buy](./evolution-point-buy.md) and the [EPB Admin Guide](./ADMIN_GUIDE_EVOLUTION_POINT_BUY.md).
 - **Format packs** — League tuning (EPB numbers and rulings, price groups and tabs, utility categories, workbook layout, `draft`-format and Core Liga defaults, rule prose) as data: the contract and accessors in `src/lib/format-pack`, the public example pack in `src/format-packs/example`, the `@format-pack` alias and `FORMAT_PACK`, and the optional pack-extension seam (`src/lib/pack-extensions`, `@pack-extensions`: supplementary records, extra sections and links a pack may add). See [Format Packs](./format-packs.md) and [Point-Buy Workbook Format](./point-buy-format.md).
@@ -33,6 +33,8 @@ This is the central documentation index for all major PokéTools modules.
 - **Match** — Match aggregation and completion workflows. See [Match](./match.md).
 - **Rating** — Glicko-2 rating logic and rollback. See [Rating](./rating.md).
 - **Gamification** — Achievements, streaks, signatures. See [Gamification](./gamification.md).
+- **Players** — The player shapes and rules deciding what a player row may show to whom: the public/private field split, the hidden-players filter, the moderation state companions, roster access, the admin player picker and the directory sort contract (`src/lib/players`). See [Players](./players.md).
+- **Evolution (tracker display)** — Client-safe display helpers of the evolution trackers: point-buy price-group display, the type-matchup payload of a season's current forms, the STAB matrix (`src/lib/evolution`). See [Evolution](./evolution.md); the EPB engine itself: [Evolution Point Buy](./evolution-point-buy.md).
 - **Social** — X/Threads/Bluesky publishing. See [Social](./social.md).
 - **Discord** — Webhook and embed notification system. See [Discord](./discord.md).
 - **Format notifications** — In-app inbox of kit leagues (a rule's `notify`, challenge events): src/lib/format-engine/notifications, /api/notifications, src/lib/supabase/queries/format-notifications.ts, src/components/notifications/NotificationBell.tsx. See [Format Kit](./format-kit.md#notifications).
@@ -47,11 +49,13 @@ This is the central documentation index for all major PokéTools modules.
 - **Public Site / Homepage** — `(public)` route group: landing page, browse, featured event card, AI chat widget mount. See [Public Site](./public-site.md).
 - **Worlds** — Season-world presentation system: the world registry resolves `/leagues/[id]` (plus tournament and draft-room pages) server-side through `resolveViewerWorld` (`?world=` > admin `route_theme` pin > format auto-map) to one of four 3D route-themed worlds — plaza (EvoLiga), sakura, mountain, clouds — with a DOM-only default fallback. See [Worlds](./worlds.md).
 - **Route canvas & warm** — The one 3D canvas and its GPU warm-up, in `src/components/world/route/`. `RouteWorldCanvas.tsx` is the entry (tier gate, `<Canvas>`, mount order, module-load installs); its parts live in `canvas/`, one module per concern: `frame-hold.ts` (draw wrapper, frame holds), `FrameCapDriver.tsx`, `render-gates.tsx`, `SceneReadinessReporter.tsx`, `LoadWarmer.tsx` (load warm host, point-light pad), `OtherPaletteHdriPrefetch.tsx`, `StagedWorld.tsx`, `load-bridges.tsx`, `capture-bridges.tsx` (harness present, render path, phase pin), `telemetry-bridges.tsx`, `DebugSceneAudit.tsx`, `batch-merge.ts` and `StaticBatcher.tsx`. `useStationWarmup.ts` only re-exports `warm/`: `station-lead.ts`, `compile-guard.ts` (warm window and compile guard), `staggered-mount.ts`, `skip-gate.ts`, `shadow-variants.ts`, `programs-warm.ts`, `load-warm.ts` (stages, budgets, state machine, registries), `compile-variants.ts`, `upload-deferral.ts`, `load-warm-io-helpers.ts`, `load-warm-io.ts` (`createLoadWarmIO`) and `theme-swap-retention.ts`. Source-text contract tests read the canvas or the warm as a whole through `__tests__/route-sources.ts`. See [Worlds](./worlds.md).
-- **League Hub** — Tabbed league overview inside a route world's `#pulse` on `/leagues/[id]` (standings, matches, group stage, playoffs, phases, insights, rules; Kale reports behind `ENABLE_KALE_CABBAGE`). `src/lib/league-hub/` holds the `?tab=` whitelist (`tabs.ts`), pure view builders (`views.ts`), de/en copy (`copy.ts`) and the server-only per-tab loader (`load.ts`); components live in `src/components/league/hub/`. See [Worlds](./worlds.md) and the [spec](./poketools-spec.md) route map (§5).
+- **League Hub** — Tabbed league overview inside a route world's `#pulse` on `/leagues/[id]` (standings, matches, group stage, playoffs, phases, insights, rules; Kale reports behind `ENABLE_KALE_CABBAGE`). `src/lib/league-hub/` holds the `?tab=` whitelist (`tabs.ts`), pure view builders (`views.ts`), de/en copy (`copy.ts`) and the server-only per-tab loader (`load.ts`); components live in `src/components/league/hub/`. See [League Hub](./league-hub.md), [Worlds](./worlds.md) and the [spec](./poketools-spec.md) route map (§5).
 - **Insights** — Unified stats/ratings hub at `/insights` with scope selector (`src/lib/insights/scope.ts`); `/leaderboard` redirects here. See [Insights](./insights.md).
 - **Wiki** — Encyclopedia at `/wiki/*`, community notes, shared entry builders in `src/lib/wiki/entries.ts`. See [Wiki](./wiki.md).
 - **Replays** — Spoiler-free public replay library at `/replays`. See [Replays](./replays.md).
 - **Profile** — Player profile composition. See [Profile](./profile.md).
+- **SEO** — What a crawler and a link preview see: real 404 statuses of public pages, the `generateMetadata` builders, the shared page reads, robots helpers and the share-limit marker (`src/lib/seo`). See [SEO](./seo.md).
+- **PWA** — The client-safe pieces of the service worker: the build id the worker is versioned with and the Cache Storage rules of the app shell (`src/lib/pwa`). See [PWA](./pwa.md).
 
 ### Content & Broadcast
 
@@ -63,6 +67,8 @@ This is the central documentation index for all major PokéTools modules.
 ### Admin & Operations
 
 - **Admin** — Admin console (`/admin/*`) and the `/api/admin/*` route namespace, for site admins and (scoped to their own leagues and tournaments) resource admins. See [Admin](./admin.md).
+- **League admin workspace** — The pure client-safe logic of the league admin workspace and the new-competition wizard: tabs, attention list, primary action, phase controls, settings patch, the unsaved-input guard, clone source, the season-delete description (`src/lib/league-admin`). See [League Admin](./league-admin.md).
+- **Dev seed** — The local-development seed (`npm run dev:seed`): a sign-in-able admin, the standard rulesets and one small league on a fresh local stack, idempotent (`src/lib/dev-seed`). See [Dev seed](./dev-seed.md).
 - **Import** — XLSX point-buy/team-roles import, sample-set/usage/stats import pipelines. See [Import](./import.md) and [Data Import Guide](./DATA_IMPORT_GUIDE.md).
 - **Reconcile** — Match/season delete and league restore → derived-data rebuild (aggregates, ratings, streaks, evolution state). See [Reconcile](./reconcile.md).
 - **Audit** — Audit logging (`src/lib/audit`) + `/api/admin/audit-log`. See [Audit](./audit.md).
@@ -83,11 +89,15 @@ This is the central documentation index for all major PokéTools modules.
 - **Teambuilder Broadcast** — Team display in OBS overlays: the legacy `src/components/broadcast/` components (the v3 broadcast migration is not started). See [Teambuilder Broadcast](./teambuilder-broadcast.md).
 - **Teambuilder Reference** — Cross-system map of the Teambuilder + Plan Team ("Match Prep") systems. See [Teambuilder Reference](./teambuilder-reference.md).
 - **Utils** — Shared utility helpers (`src/lib/utils`, including `cn()`). See [Utils](./utils.md).
+- **API helpers** — The shared helpers every API route builds on: `safeErrorResponse`, cache headers, pagination parsing, the JSON body reader, the invalid-path-id guard, the delete rebuild warning, team auth (`src/lib/api`). See [API](./api.md).
+- **Cache** — The tagged public read cache: server-side reads of public data in Next's data cache with PII stripping and tag-based expiry (`src/lib/cache`). See [Cache](./cache.md).
+- **Stats** — The pure row builders the statistics pages render: usage rows, kill rankings, standings rows and previews, Pokémon detail statistics, live + historical combination (`src/lib/stats`). See [Stats](./stats.md).
+- **Motion** — The single numeric source for every animation: duration/easing/offset tokens and the route-change cross-fade (`src/lib/motion`). See [Motion](./motion.md).
 - **UI Tables** — Shared client-table sort/pagination primitives in `src/lib/ui`: `table-params.ts` (page-size clamp, 3-state sort cycle, compound sort params, nullish-safe comparator) and `use-client-table.ts` (client-side sort + pagination hook), used by `src/components/ui/Table.tsx` and the paginated list pages. See [UI Tables](./ui.md).
 
 ### Repository & Agent Docs
 
-- **Security Patterns** — Full OWASP mapping, mandatory error-handling pattern, input-validation pattern (always-needed subset lives in `AGENTS.md`). See [Security Patterns](./security-patterns.md).
+- **Security Patterns** — Full OWASP mapping, mandatory error-handling pattern, input-validation pattern (always-needed subset lives in `AGENTS.md`). See [Security Patterns](./security-patterns.md), which also covers the CSP report endpoint (`src/lib/security`).
 - **Dependencies** — Gotcha-prone packages (`next-auth` beta, `@pkmn/*`, `motion`, Zod date encoding, `@tanstack/react-virtual`). See [Dependencies](./dependencies.md).
 - **Review Remediation** — Truth-grounded procedure for working automated code-review and CI findings (review bots, CI failures, `npm audit`). See [Review Remediation](./review-remediation.md).
 
@@ -178,20 +188,25 @@ When modifying a module:
 
 - [Public Site / Homepage](./public-site.md)
 - [Worlds Module](./worlds.md)
+- [League Hub Module](./league-hub.md)
 - [Auth Module](./auth.md)
 - [Email/Password Auth](./auth-email-password.md)
 - [Supabase Module](./supabase.md)
 - [Bring your own Supabase project](./supabase-environments.md)
 - [Tournament Module](./tournament.md)
+- [League Phase Module](./league-phase.md)
 - [Draft Module](./draft.md)
 - [Evolution Point Buy Module](./evolution-point-buy.md)
+- [Evolution Module](./evolution.md)
 - [Format Kit](./format-kit.md)
 - [Ruleset Studio](./ruleset-studio.md)
 - [Ruleset Presets](./ruleset-presets.md)
 - [Season Module](./season.md)
+- [State Machine Module](./state-machine.md)
 - [Match Module](./match.md)
 - [Rating Module](./rating.md)
 - [Gamification Module](./gamification.md)
+- [Players Module](./players.md)
 - [Social Module](./social.md)
 - [Discord Module](./discord.md)
 - [AI Module (legacy)](./ai.md)
@@ -200,6 +215,8 @@ When modifying a module:
 - [Wiki Module](./wiki.md)
 - [Replays Module](./replays.md)
 - [Profile Module](./profile.md)
+- [SEO Module](./seo.md)
+- [PWA Module](./pwa.md)
 - [PKMN Module](./pkmn.md)
 - [Avatar Module](./avatar.md)
 - [Broadcast Module](./broadcast.md)
@@ -207,17 +224,25 @@ When modifying a module:
 - [Cast Studio Module](./cast-studio.md)
 - [Creator Hub Module](./creator-hub.md)
 - [Design Module](./design.md)
+- [Fluid Module](./fluid.md)
 - [Smogon Module](./smogon.md)
 - [Team Module](./team.md)
 - [Teambuilder Editor Module](./teambuilder-editor.md)
 - [Teambuilder Broadcast Module](./teambuilder-broadcast.md)
 - [Teambuilder Reference](./teambuilder-reference.md)
 - [Utils Module](./utils.md)
+- [Stats Module](./stats.md)
+- [Motion Module](./motion.md)
+- [Cache Module](./cache.md)
+- [API Helpers Module](./api.md)
 - [UI Tables Module](./ui.md)
 - [Admin Module](./admin.md)
+- [League Admin Module](./league-admin.md)
+- [Dev Seed Module](./dev-seed.md)
 - [Import Module](./import.md)
 - [Reconcile Module](./reconcile.md)
 - [Audit Module](./audit.md)
+- [Visual Harness](./visual-harness.md)
 - [Validation Module](./validation.md)
 - [Security Patterns](./security-patterns.md)
 - [Dependencies](./dependencies.md)
