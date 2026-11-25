@@ -743,6 +743,26 @@ describe('module docs: file structure trees', () => {
     expect(uncoveredFiles(profile, [...topLevelFiles('profile'), 'zz-scratch.ts'])).toEqual(['zz-scratch.ts']);
     expect(uncoveredFiles('src/lib/x/\n├── epb-*.ts  # EPB\n└── a.ts', ['epb-matchday.ts', 'a.ts', 'b.ts'])).toEqual(['b.ts']);
   });
+
+  it('every module directory under src/lib is owned by a doc (issue #359)', () => {
+    // The module-to-doc direction: the checks above all start from a doc, so a module no doc
+    // claims could reach main undocumented (src/lib/fluid/ and src/lib/league-phase/ both did).
+    // Every module directory must be owned by some doc's tree — or sit in a doc's
+    // SUMMARIZED_MODULES list — so a new undocumented module fails here instead of passing
+    // silently. `src/lib/__tests__/` is the shared test root, not a module.
+    const moduleDirs = new Set(
+      publicFiles('src/lib')
+        .map((f) => f.split('/'))
+        .filter((parts) => parts.length >= 4 && parts[2] !== '__tests__')
+        .map((parts) => parts[2]),
+    );
+    const owned = new Set([
+      ...moduleDocs.flatMap(({ modules }) => modules),
+      ...Object.values(SUMMARIZED_MODULES).flat(),
+    ]);
+    const undocumented = [...moduleDirs].filter((m) => !owned.has(m)).sort();
+    expect(undocumented).toEqual([]);
+  });
 });
 /** Lines that say a module has no dedicated test directory, with the module the doc describes. */
 export function noDedicatedClaims(doc, docName = '') {
