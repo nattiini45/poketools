@@ -455,6 +455,9 @@ export const entryAttrSchema = z.strictObject({
 export const domainEntrySchema = z.strictObject({
   id: keySchema,
   attrs: boundedArray(entryAttrSchema, 0, MAX_ENTRY_ATTRS).default(() => []),
+  aliases: boundedArray(keySchema, 1, MAX_MULTI_VALUES).optional(),
+  exact_level: intRange(1, 100).optional(),
+  detail: ltextSchema.optional(),
 });
 
 export const domainDefSchema = z.strictObject({
@@ -463,6 +466,8 @@ export const domainDefSchema = z.strictObject({
   entries: boundedArray(domainEntrySchema, 1, MAX_DOMAIN_ENTRIES),
   initially: z.enum(['locked', 'unlocked']).default('unlocked'),
   visibility: z.enum(['public', 'when_unlocked', 'admins']).default('public'),
+  overview: z.strictObject({ rules: ltextSchema.optional() }).optional(),
+  listed_species_only: z.boolean().optional(),
 });
 
 const eventStage = { stage: keySchema.optional() };

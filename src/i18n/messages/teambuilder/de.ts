@@ -68,6 +68,7 @@ export default defineDe<typeof en>()({
       ruleset_load_failed:
         'Das Regelwerk für diese Prüfung konnte nicht verwendet werden, das Team wurde nur gegen das Format geprüft und ist für deine Liga nicht als legal bestätigt',
       kit_roster_size: 'Teamgröße: Diese Liga verlangt {min} bis {max} Pokémon, du hast {have}',
+      kit_team_rules_unavailable: 'Die Teamregeln für diese Runde sind noch nicht verfügbar',
       kit_count_min: 'Teamregel: Du brauchst mindestens {min} Pokémon aus {source}, hast aber {have}',
       kit_count_max: 'Teamregel: Aus {source} sind höchstens {max} Pokémon erlaubt, du hast {have}',
       kit_not_allowed: '{species} gehört zu keinem Pool, den du in dieser Liga nutzen darfst',

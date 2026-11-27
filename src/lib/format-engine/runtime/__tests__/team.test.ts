@@ -232,6 +232,17 @@ describe('a pool the players may not see never reaches a verdict', () => {
     expect(codes(run(withVisibility('when_unlocked'), count(false), UNLOCKED))).toEqual(['kit_count_max#0']);
   });
 
+  it('reports a failed count without disclosing the source or counts of a locked pool', () => {
+    const def = withVisibility('when_unlocked');
+    const source = { kind: 'domain', domain: 'new_year', unlocked_only: true } as const;
+    const constraints: TeamConstraint[] = [
+      { kind: 'count', source: { kind: 'any_of', sources: [source, { kind: 'species', ids: ['garchomp'] }] }, min: 1 },
+    ];
+    const issues = run(def, constraints);
+    expect(issues).toEqual([{ code: 'kit_team_rules_unavailable', constraint_index: 0, params: {} }]);
+    expect(run(def, constraints, UNLOCKED)).toEqual([]);
+  });
+
   it('matches nothing in an admins pool, even when it is unlocked', () => {
     expect(run(withVisibility('admins'), count(false), UNLOCKED)).toEqual([]);
   });
@@ -434,6 +445,15 @@ describe('type quota, Tera, evolution stage, distinct', () => {
       ['kit_distinct', 'species', 2],
     ]);
   });
+
+  it('uses the entry attribute for an explicitly listed alternate form', () => {
+    const state = stateFor(DEF, { amendments: [{
+      domain: 'normal', add: [{ id: 'rotomheat', aliases: ['rotomwash'], attrs: [{ key: 'role', value: 'attacker' }] }],
+    }] });
+    const members = [member('garchomp'), member('rotomwash', { baseSpecies: 'rotom' })];
+    const constraints: TeamConstraint[] = [{ kind: 'distinct', by: 'attr', attr: 'role', max_per: 1 }];
+    expect(codes(evaluateConstraints(input({ state, constraints, members })))).toEqual(['kit_distinct#0']);
+  });
 });
 
 describe('the team verdict', () => {
@@ -478,7 +498,7 @@ describe('the team verdict', () => {
     const params = { min: 1, max: 2, have: 3, source: 'domain x', by: 'item', value: 'Leftovers', type: 'Fire', species: 'Garchomp', types: 'Fire/Flying', stage: 'fe', index: 2, reason: 'expr_unknown_ref' };
     for (const code of [
       'kit_roster_size', 'kit_count_min', 'kit_count_max', 'kit_not_allowed', 'kit_distinct', 'kit_type_quota', 'kit_tera_banned',
-      'kit_tera_stab', 'kit_tera_attr', 'kit_evolution_stage', 'kit_constraint_expr',
+      'kit_tera_stab', 'kit_tera_attr', 'kit_evolution_stage', 'kit_constraint_expr', 'kit_team_rules_unavailable',
     ] as const) {
       expect(constraintIssueText(code, params)).toBe(en.dynamic(`validation.issue.${code}`, params));
       expect(de.dynamic(`validation.issue.${code}`, params)).not.toBe(en.dynamic(`validation.issue.${code}`, params));

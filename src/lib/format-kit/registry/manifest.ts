@@ -328,13 +328,21 @@ const ENTRY_ATTR = obj([
   req('key', KEY),
   req('value', { t: 'oneof', options: [TEXT_VALUE, NUMBER, BOOL, arr(KEY, 1, MAX_MULTI_VALUES)] }),
 ]);
-const DOMAIN_ENTRY = obj([req('id', KEY), dflt('attrs', arr(ENTRY_ATTR, 0, MAX_ENTRY_ATTRS), [])]);
+const DOMAIN_ENTRY = obj([
+  req('id', KEY),
+  dflt('attrs', arr(ENTRY_ATTR, 0, MAX_ENTRY_ATTRS), []),
+  opt('aliases', arr(KEY, 1, MAX_MULTI_VALUES)),
+  opt('exact_level', int(1, 100)),
+  opt('detail', LTEXT),
+]);
 const DOMAIN_DEF = obj([
   req('key', KEY),
   req('label', LTEXT),
   req('entries', arr(DOMAIN_ENTRY, 1, MAX_DOMAIN_ENTRIES)),
   dflt('initially', oneOf('locked', 'unlocked'), 'unlocked'),
   dflt('visibility', oneOf('public', 'when_unlocked', 'admins'), 'public'),
+  opt('overview', obj([opt('rules', LTEXT)])),
+  opt('listed_species_only', BOOL),
 ]);
 
 const STAGE_SCOPED_EVENT = (event: string): Spec => variant('event', event, [opt('stage', KEY)]);

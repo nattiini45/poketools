@@ -81,6 +81,7 @@ export default {
         'The ruleset for this check could not be used, so the team was checked against the format only and is not confirmed legal for your league',
       // Custom-format stage constraints; the English texts equal `constraintIssueText` (format-engine/runtime/team.ts)
       kit_roster_size: 'Team size: this league needs {min} to {max} Pokémon, found {have}',
+      kit_team_rules_unavailable: 'This round’s team rules are not available yet',
       kit_count_min: 'Team rule: at least {min} Pokémon from {source} needed, found {have}',
       kit_count_max: 'Team rule: at most {max} Pokémon from {source} allowed, found {have}',
       kit_not_allowed: '{species} is not in any pool you may use in this league',

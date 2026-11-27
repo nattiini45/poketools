@@ -37,12 +37,16 @@ export interface DomainEntriesView {
 
 /**
  * A pool (domain) the viewer may know about, with whether it is open yet. Unlike `domains` it also lists a pool that no
- * actionable step draws from (a locked one, one outside any step) and carries no entries; an `admins` domain is never listed.
+ * actionable step draws from. An `admins` domain is never listed.
  */
 export interface PoolView {
   key: string;
   label: LText;
   unlocked: boolean;
+  overview?: {
+    rules?: LText;
+    entries: { id: string; exact_level?: number; detail?: LText }[];
+  };
 }
 
 /**

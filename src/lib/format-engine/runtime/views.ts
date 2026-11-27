@@ -39,7 +39,7 @@ import { challengeOf } from '../challenge';
 import { actionSubmissionMachine } from './action-state';
 import { actorAccess } from './actions';
 import { buildLateJoiners, type FiredEventRecord } from './late-joiners';
-import { domainView, findDomainView, visibleEntries, type DomainView } from './domains';
+import { domainView, entrySpecies, findDomainView, visibleEntries, type DomainView } from './domains';
 import { entryContext, type EnvBase } from './expr-env';
 import type { KitContext } from './load';
 import { revealsPerRecipient, visibleLinks } from './relations';
@@ -384,15 +384,32 @@ export function buildPlayerView(
   // Every pool the viewer may know about with its lock state: an `admins` domain stays unlisted, and a `when_unlocked`
   // domain that is still locked stays unlisted too (its very existence is the surprise until it opens). The teambuilder
   // card shows a pool that is not a step of any action, such as one the organizer unlocks later.
-  const pools: PoolView[] = domainView(def, state.flags, state.amendments)
+  const allDomains = domainView(def, state.flags, state.amendments);
+  const pools: PoolView[] = allDomains
     .filter((view) => view.visibility !== 'admins' && !(view.visibility === 'when_unlocked' && !view.unlocked))
-    .map((view) => ({ key: view.key, label: labelOf((def.domains ?? []).find((d) => d.key === view.key)?.label, view.key), unlocked: view.unlocked }));
+    .map((view) => {
+      const domain = def.domains?.find((d) => d.key === view.key);
+      const overview = domain?.overview;
+      return {
+        key: view.key, label: labelOf(domain?.label, view.key), unlocked: view.unlocked,
+        ...(overview !== undefined && {
+          overview: {
+            ...overview,
+            entries: visibleEntries(view, false).map(({ id, exact_level, detail }) => ({
+              id, ...(exact_level !== undefined && { exact_level }), ...(detail !== undefined && { detail }),
+            })),
+          },
+        }),
+      };
+    });
 
   // The species of every pool the viewer may see (a locked surprise pool contributes none): the teambuilder narrows its
   // species list to these, so a hidden pool's members never reach the client. Own gifts are species the viewer holds.
   const poolSpecies = new Set<string>();
-  for (const view of domainView(def, state.flags, state.amendments)) {
-    for (const entry of visibleEntries(view, false)) poolSpecies.add(entry.id);
+  for (const view of allDomains) {
+    for (const entry of visibleEntries(view, false)) {
+      for (const id of entrySpecies(entry)) poolSpecies.add(id);
+    }
   }
   for (const item of state.items) {
     if (item.player_id === viewer && item.item_id !== null) poolSpecies.add(item.item_id);

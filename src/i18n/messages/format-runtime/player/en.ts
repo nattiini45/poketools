@@ -19,6 +19,12 @@ export default {
     closed: 'This league is closed. You can look at everything, but no more moves can be made.',
     empty: 'There is nothing for you to do in this league right now.',
   },
+  pools: {
+    heading: 'Pokémon pools',
+    search: 'Search Pokémon',
+    empty: 'No Pokémon match your search.',
+    exactLevel: 'Required level {level}',
+  },
   player: {
     former: 'former player',
   },
