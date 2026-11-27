@@ -291,7 +291,7 @@ export function setPairingKind(s: Stage, kind: Pairing['kind']): Stage {
 
 const PAIRING_MEMBERS: Readonly<Record<string, readonly string[]>> = {
   round_robin: ['legs', 'mirror_legs'],
-  swiss: ['rounds', 'avoid_repeats'],
+  swiss: ['rounds', 'avoid_repeats', 'no_consecutive_repeats'],
   single_elim: ['third_place'],
   double_elim: ['bracket_reset'],
   manual: [],

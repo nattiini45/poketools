@@ -23,6 +23,7 @@ import { seededRand } from '@/lib/format-kit/expr/rand';
 import { generateBipartiteRound } from '@/lib/tournament/bipartite';
 import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { generateSwissRound } from '@/lib/tournament/swiss';
+import { buildPairingHistory } from '@/lib/tournament/standings';
 import type { ByeRecord, GeneratedRound, MatchRecord } from '@/lib/tournament/types';
 import { computeStageStandings, type KitOutcome, type StageTableExtras } from './standings';
 
@@ -207,6 +208,12 @@ export function pairNextRound(input: KitPairingInput): KitPairingResult {
     ranked,
     pairedMatches: swiss.avoid_repeats ? input.pairedMatches : [],
     ...(pairing.kind === 'filter' ? { allowPair: input.allowPair } : {}),
+    ...(swiss.no_consecutive_repeats && {
+      strict: {
+        previousRound: buildPairingHistory(input.pairedMatches.filter((match) => match.round_number === roundNumber - 1)),
+        points: new Map(table.map((row) => [row.player_id, row.points])),
+      },
+    }),
   });
   return { kind: 'round', round };
 }

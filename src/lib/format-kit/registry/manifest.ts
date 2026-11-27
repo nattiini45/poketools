@@ -180,6 +180,7 @@ const ROUND_ROBIN = variant('kind', 'round_robin', [
 const SWISS = variant('kind', 'swiss', [
   req('rounds', { t: 'oneof', options: [int(1, MAX_SWISS_ROUNDS), oneOf('auto')] }),
   dflt('avoid_repeats', BOOL, true),
+  opt('no_consecutive_repeats', BOOL),
 ]);
 const SINGLE_ELIM = variant('kind', 'single_elim', [dflt('third_place', BOOL, false)]);
 const DOUBLE_ELIM = variant('kind', 'double_elim', [dflt('bracket_reset', BOOL, false)]);
@@ -497,6 +498,7 @@ const FILTER_BASE: Spec = {
       spec: variant('kind', 'swiss', [
         req('rounds', { t: 'oneof', options: [int(1, MAX_SWISS_ROUNDS), oneOf('auto')] }),
         dflt('avoid_repeats', BOOL, true),
+        opt('no_consecutive_repeats', BOOL),
       ]),
     },
     {
