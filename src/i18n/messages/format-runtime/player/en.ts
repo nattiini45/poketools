@@ -55,6 +55,7 @@ export default {
     noMatches: 'No entry matches your search.',
     locked: 'This list is not unlocked yet.',
     distinct: 'Your picks have to differ in {attr}.',
+    sameValue: 'Already represented in your picks',
     taken: 'Taken by someone else',
     notEligible: 'Not available to you',
   },

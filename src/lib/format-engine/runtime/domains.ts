@@ -20,6 +20,24 @@ export function entrySpecies(entry: DomainEntry): readonly string[] {
   return [entry.id, ...(entry.aliases ?? [])];
 }
 
+/** Compare the typed value in both the picker and submission validator. An absent attribute does not conflict. */
+export function distinctAttrKey(entry: Pick<DomainEntry, 'attrs'>, attr: string): string | undefined {
+  return JSON.stringify(entry.attrs.find(({ key }) => key === attr)?.value);
+}
+
+export function selectedDistinctAttrKeys(
+  entries: readonly Pick<DomainEntry, 'id' | 'attrs'>[],
+  attr: string | null,
+  selected: readonly string[],
+): string[] {
+  if (attr === null || selected.length === 0) return [];
+  const ids = new Set(selected);
+  return entries.flatMap((entry) => {
+    const key = ids.has(entry.id) ? distinctAttrKey(entry, attr) : undefined;
+    return key === undefined ? [] : [key];
+  });
+}
+
 /** The flag key of a domain's lock state. */
 export const domainFlagKey = (domain: string): string => `domain:${domain}`;
 

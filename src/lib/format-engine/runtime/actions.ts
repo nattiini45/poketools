@@ -25,7 +25,7 @@
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import type { DomainEntry, FormatDefinition, PlayerActionRule } from '@/lib/format-kit/types';
 import { toMap } from '@/lib/studio-core/keys';
-import { findDomainView } from './domains';
+import { distinctAttrKey, findDomainView } from './domains';
 import { entryContext, type EnvBase } from './expr-env';
 import { own, type ActionPick, type KitRuntimeState } from './types';
 
@@ -193,9 +193,8 @@ export function validateActionSubmission(
         if (!result.ok || result.value !== true) issues.push({ code: 'where_false', step: index, item_id: pick.item_id });
       }
       if (distinct !== undefined) {
-        const value = entry.attrs.find((a) => a.key === distinct.key)?.value;
-        if (value !== undefined) {
-          const text = JSON.stringify(value);
+        const text = distinctAttrKey(entry, distinct.key);
+        if (text !== undefined) {
           if (seen.has(text)) issues.push({ code: 'distinct_attr_duplicate', step: index, item_id: pick.item_id });
           seen.add(text);
         }
