@@ -14,7 +14,7 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   updateTournament: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), createRoundWithMatches: vi.fn() }));
-vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchesByTournament: vi.fn(), getMatchesByRound: vi.fn() }));
+vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchesByTournament: vi.fn(), getMatchPairsByRound: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-groups', () => ({ seasonHasGroups: vi.fn() }));
 vi.mock('@/lib/tournament/group-rounds', () => ({ ensurePhaseGroupsFromLeague: vi.fn() }));
 vi.mock('@/lib/format-studio/attach', () => ({ assertSeasonFormatAttached: vi.fn() }));
@@ -33,7 +33,7 @@ import { POST } from '@/app/api/tournaments/[id]/rounds/manual/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { createRoundWithMatches, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { getMatchesByRound, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getMatchPairsByRound, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
@@ -127,12 +127,12 @@ describe('manual round on a kit phase', () => {
     vi.mocked(loadKitPhase).mockResolvedValue(kit);
     vi.mocked(getTournamentById).mockResolvedValue(tournament({ status: 'active', current_round: 2 }));
     vi.mocked(getRoundsByTournament).mockResolvedValue([{ id: 'r-2', round_number: 2, status: 'completed' }] as never);
-    vi.mocked(getMatchesByRound).mockResolvedValue([{ player_1_id: P2, player_2_id: P1 }] as never);
+    vi.mocked(getMatchPairsByRound).mockResolvedValue([{ player_1_id: P2, player_2_id: P1 }]);
 
     const res = await POST(forced(), routeParams);
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('swiss_manual_consecutive_repeat');
-    expect(getMatchesByRound).toHaveBeenCalledExactlyOnceWith('r-2');
+    expect(getMatchPairsByRound).toHaveBeenCalledExactlyOnceWith('r-2');
     expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 

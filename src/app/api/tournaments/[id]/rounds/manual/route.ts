@@ -9,7 +9,7 @@ import {
 } from '@/lib/supabase/queries/tournaments';
 import { kitWriteFence } from '@/lib/format-engine/write-fence';
 import { assertManualSwissPairings } from '@/lib/format-engine/pairing';
-import { getMatchesByRound } from '@/lib/supabase/queries/matches';
+import { getMatchPairsByRound } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament, createRoundWithMatches } from '@/lib/supabase/queries/rounds';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
@@ -242,7 +242,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const nextRoundNumber = tournament.current_round + 1;
     const previous = existingRounds.find((round) => round.round_number === nextRoundNumber - 1);
     if (previous && isKitEnginePhase(kitPhase)) {
-      await assertManualSwissPairings(kitPhase.stage.pairing, body.pairings, () => getMatchesByRound(previous.id));
+      await assertManualSwissPairings(kitPhase.stage.pairing, body.pairings, () => getMatchPairsByRound(previous.id));
     }
     const roundName = body.name?.trim() || `Round ${nextRoundNumber}`;
     const roundBestOf =
