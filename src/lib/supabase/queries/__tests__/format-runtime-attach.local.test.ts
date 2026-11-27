@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 
 // LIVE-LOCAL test for the runtime clean-up of 20261105090000_format_runtime.sql (format__clear_runtime) and its two
@@ -107,6 +108,51 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
     await fillRuntime(ids.other, 'other');
     expect(Object.values(await sizes(ids.season)).every((n) => n > 0)).toBe(true);
     expect(Object.values(await sizes(ids.other)).every((n) => n > 0)).toBe(true);
+  });
+
+  it('backfills a rating-seeded roster and reseeds when a higher-rated player joins before round one', async () => {
+    const seasonId = randomUUID();
+    const rulesetId = randomUUID();
+    const stage = { key: 'swiss', participants: { from: 'roster', seeding: 'rating', enrollment: 'league_roster' } };
+    expect((await insertLocalRuleset(client, { id: rulesetId, name: `Attach rating ${RUN}` })).error).toBeNull();
+    try {
+      expect((await client.from('player_ratings').insert([
+        { player_id: ids.p1, rating: 1300 },
+        { player_id: ids.p2, rating: 1700 },
+      ])).error).toBeNull();
+      expect((await client.from('seasons').insert({
+        id: seasonId, name: `Rated roster ${RUN}`, format_type: 'custom', ruleset_id: rulesetId,
+      })).error).toBeNull();
+      const add = (playerId: string) => client.rpc('season_participant_add', { p_season_id: seasonId, p_player_id: playerId });
+      expect((await add(ids.p1)).error).toBeNull();
+      const result = await client.rpc('format_attach_season', {
+        p_season_id: seasonId,
+        p_definition_id: null as unknown as string,
+        p_version_no: 1,
+        p_spec: { stages: [stage] },
+        p_spec_hash: HASH,
+        p_seed: 'seedseed1',
+        p_stages: [{
+          key: stage.key, name: 'Swiss', bracket_type: 'swiss', ruleset_id: rulesetId, best_of_default: 1,
+          is_doubles: false, bracket_reset_enabled: false, stage_order: 0, stage_spec: { v: 1, stage },
+        }],
+      });
+      expect(result.error).toBeNull();
+      const phase = await client.from('tournaments').select('id').eq('season_id', seasonId).single();
+      expect(phase.error).toBeNull();
+      const phaseId = phase.data?.id;
+      if (!phaseId) throw new Error('Expected the attached Swiss phase');
+      const roster = () => client.from('tournament_participants').select('player_id, seed').eq('tournament_id', phaseId).order('seed');
+      expect(await roster()).toMatchObject({ error: null, data: [{ player_id: ids.p1, seed: 1 }] });
+      expect((await add(ids.p2)).error).toBeNull();
+      expect(await roster()).toMatchObject({
+        error: null, data: [{ player_id: ids.p2, seed: 1 }, { player_id: ids.p1, seed: 2 }],
+      });
+    } finally {
+      await client.from('seasons').delete().eq('id', seasonId);
+      await client.from('player_ratings').delete().in('player_id', [ids.p1, ids.p2]);
+      await deleteLocalRuleset(client, rulesetId);
+    }
   });
 
   it('refuses a replace over links, items and submissions without the confirmation, and changes nothing', async () => {

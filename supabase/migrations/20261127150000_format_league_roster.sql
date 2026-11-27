@@ -74,6 +74,7 @@ DECLARE
   v_group_table text := CASE WHEN p_native THEN 'phase_groups' ELSE 'tournament_groups' END;
   v_owner_column text := CASE WHEN p_native THEN 'phase_id' ELSE 'tournament_id' END;
   v_added uuid[];
+  v_seed_phases uuid[];
   v_player uuid;
 BEGIN
   PERFORM 1 FROM public.seasons WHERE id = p_season_id FOR NO KEY UPDATE;
@@ -113,10 +114,40 @@ BEGIN
       AND NOT EXISTS (SELECT 1 FROM public.%1$I m WHERE m.%2$I = p.id AND m.player_id = s.player_id)
     ORDER BY p.id, s.player_id
     ON CONFLICT (%2$I, player_id) DO NOTHING
-    RETURNING player_id
+    RETURNING %2$I AS phase_id, player_id
     )
-    SELECT array_agg(DISTINCT player_id ORDER BY player_id) FROM inserted
-  $query$, v_member_table, v_owner_column, v_phase_table, v_group_table) INTO v_added USING p_season_id, p_player_id;
+    SELECT array_agg(DISTINCT i.player_id ORDER BY i.player_id),
+      array_agg(DISTINCT i.phase_id) FILTER (
+        WHERE p.status = 'upcoming' AND p.stage_spec #>> '{stage,participants,seeding}' IN ('rating', 'random')
+      )
+    FROM inserted i JOIN public.%3$I p ON p.id = i.phase_id
+  $query$, v_member_table, v_owner_column, v_phase_table, v_group_table)
+    INTO v_added, v_seed_phases USING p_season_id, p_player_id;
+
+  IF v_seed_phases IS NOT NULL THEN
+    -- Rank the whole field when a seat is added. Clearing first allows seed exchanges under the unique index.
+    EXECUTE format('UPDATE public.%I SET seed = NULL WHERE %I = ANY ($1)', v_member_table, v_owner_column)
+      USING v_seed_phases;
+    EXECUTE format($query$
+      WITH ranked AS (
+        SELECT p.id AS phase_id, m.player_id, row_number() OVER (
+          PARTITION BY p.id ORDER BY
+            CASE WHEN s.mode = 'rating' THEN coalesce(r.rating, 1500) END DESC,
+            CASE WHEN s.mode = 'rating' THEN pl.name END,
+            CASE WHEN s.mode = 'random' THEN md5($2 || ':' || p.format_stage_key || ':' || m.player_id::text) END,
+            m.player_id
+        )::integer AS seed
+        FROM public.%1$I m
+        JOIN public.%3$I p ON p.id = m.%2$I
+        CROSS JOIN LATERAL (SELECT p.stage_spec #>> '{stage,participants,seeding}' AS mode) s
+        JOIN public.players pl ON pl.id = m.player_id
+        LEFT JOIN public.player_ratings r ON r.player_id = m.player_id AND s.mode = 'rating'
+        WHERE p.id = ANY ($1)
+      )
+      UPDATE public.%1$I m SET seed = r.seed FROM ranked r
+      WHERE m.%2$I = r.phase_id AND m.player_id = r.player_id
+    $query$, v_member_table, v_owner_column, v_phase_table) USING v_seed_phases, v_seed;
+  END IF;
 
   IF v_added IS NOT NULL THEN
     FOREACH v_player IN ARRAY v_added LOOP
