@@ -3,7 +3,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { loadKitPhase } from '@/lib/format-engine/load';
 import { kitPairsRounds } from '@/lib/format-engine/pairing';
 import { openForbiddenPairingCheck } from '@/lib/format-engine/pairing-server';
-import { assertNoRoundOpenAhead, assertPhaseGenerates, assertPhaseReadyForFirstRound, isKitEnginePhase, wantsForcedStart } from '@/lib/format-engine/route-guards';
+import { assertNoRoundOpenAhead, assertPhaseGenerates, assertPhaseReadyForFirstRound, isKitEnginePhase, syncsLeagueRoster, wantsForcedStart } from '@/lib/format-engine/route-guards';
 import { roundDeadlineIso } from '@/lib/format-engine/runtime/calendar';
 import { planChecks } from '@/lib/format-engine/runtime/checks';
 import { openChecks } from '@/lib/format-engine/runtime/checks-server';
@@ -16,6 +16,7 @@ import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { logger } from '@/lib/logger';
 import { getNativeKitMatchFacts } from '@/lib/supabase/queries/phase-format-runtime';
 import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
+import { syncFormatLeagueRoster } from '@/lib/supabase/queries/seasons';
 import type { GeneratedRound } from '@/lib/tournament/types';
 import type { SessionPlayer } from '@/types/auth';
 import type { Phase, PhaseRound } from '@/types/league-phase';
@@ -34,11 +35,16 @@ export async function prepareNativeGenerationKit(input: {
   const { season, phase, kit, matches, rounds, actor, request } = input;
   if (season.format_type !== 'custom') return null;
   await assertSeasonFormatAttached(season.id);
-  const head = await kit.storage.head(season.id);
+  let head = await kit.storage.head(season.id);
   if (!head) throw stale();
   if (head.engine !== 'kit') return { revision: head.revision, pairing: null } as const;
 
-  const pairing = await loadKitPhase(season.id, phase.id, kit.storage);
+  let pairing = await loadKitPhase(season.id, phase.id, kit.storage);
+  if (isKitEnginePhase(pairing) && phase.status === 'upcoming' && syncsLeagueRoster(pairing)) {
+    await syncFormatLeagueRoster(season.id, true);
+    [head, pairing] = await Promise.all([kit.storage.head(season.id), loadKitPhase(season.id, phase.id, kit.storage)]);
+    if (!head) throw stale();
+  }
   if (!isKitEnginePhase(pairing) || pairing.revision !== head.revision) throw stale();
   assertPhaseGenerates(pairing);
   if (!kitPairsRounds(pairing.stage)) {

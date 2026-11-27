@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Pairing, Stage } from '@/lib/format-kit/types';
+import type { Pairing } from '@/lib/format-kit/types';
 import {
   filteredRoundRobinRound,
   isChallengeLadder,
@@ -19,8 +19,9 @@ const roundRobin = { kind: 'round_robin', legs: 1, mirror_legs: true } as const;
 const swiss = { kind: 'swiss', rounds: 'auto', avoid_repeats: true } as const;
 
 function input(pairing: Pairing, over: Partial<KitPairingInput> = {}): KitPairingInput {
-  const stage: Pick<Stage, 'key' | 'pairing' | 'scoring' | 'rank'> = {
+  const stage: KitPairingInput['stage'] = {
     key: 'stage',
+    participants: { from: 'roster', seeding: 'manual' },
     pairing,
     scoring: { win: 1, loss: 0, bye: 1 },
     rank: [],

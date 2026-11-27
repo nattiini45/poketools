@@ -499,6 +499,13 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     env: rosterEnv(1),
     params: { relation: 'santa', roster: 1 },
   }),
+  fx('error', 'relation-draw-invalid', 'relation_draw_invalid', '/relations/0/draw', mutate(G, [
+    { op: 'add', path: '/relations/0/draw', value: 'admin' },
+    { op: 'replace', path: '/relations/0/shape', value: 'manual' },
+  ]), { params: { relation: 'santa' } }),
+  fx('error', 'relation-splice-invalid', 'relation_splice_invalid', '/relations/0/late_joiners', mutate(G, [
+    { op: 'add', path: '/relations/0/late_joiners', value: 'splice' },
+  ]), { params: { relation: 'santa' } }),
   fx('error', 'resource-exclusive-needs-domain', 'resource_exclusive_needs_domain', '/resources/1/exclusive', mutate(G, [
     { op: 'replace', path: '/resources/1/exclusive', value: 'global' },
   ]), { params: { resource: 'coins' } }),
@@ -649,6 +656,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'foreach-group-own-groups', 'foreach_group_invalid', '/stages/4/groups', mutate(W, [
     { op: 'add', path: '/stages/4/groups', value: { count: 2, method: 'serpentine' } },
   ]), { params: { stage: 'per_group', from_stage: 'groups', reason: 'own_groups' } }),
+  fx('error', 'foreach-group-league-enrollment', 'foreach_group_invalid', '/stages/4/participants/enrollment', mutate(W, [
+    { op: 'replace', path: '/stages/4/participants', value: { from: 'roster', seeding: 'random', enrollment: 'league_roster' } },
+  ]), { params: { stage: 'per_group', from_stage: 'groups', reason: 'league_roster' } }),
   fx('error', 'foreach-group-not-earlier', 'foreach_group_invalid', '/stages/4/foreach_group/from', mutate(W, [
     { op: 'replace', path: '/stages/4/foreach_group/from', value: 'houses' },
   ]), { params: { stage: 'per_group', from_stage: 'houses', reason: 'no_groups' } }),

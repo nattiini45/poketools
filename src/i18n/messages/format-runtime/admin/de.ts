@@ -276,6 +276,7 @@ export default defineDe<typeof en>()({
     drawRoster: 'Spieler in der Auslosung ({count})',
     drawRosterEmpty: 'Noch niemand steht auf der Teilnehmerliste, es gibt also nichts auszulosen.',
     drawConfirmLabel: 'Tippe {count} ein, um zu bestätigen, dass diese Liste vollständig ist',
+    drawBodySplice: 'Der Liga-Seed lost jedem Spieler einen Empfänger zu. Nachrücker werden in die bestehende Auslosung eingefügt. Verborgene Zuordnungen sind erst nach dem Einblenden sichtbar. Deine Begründung wird gespeichert.',
     drawn: '{relation} ausgelost.',
     submissionsHeading: 'Abgaben',
     submissionsCaption: 'Abgaben für {action}',

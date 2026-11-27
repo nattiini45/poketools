@@ -45,6 +45,15 @@ describe('RulesInspector', () => {
     expect((html.match(/>Honor system</g) ?? []).length).toBe(doc.rules.length);
   });
 
+  it.each(['en', 'de'] as const)('shows the relation draw and late-joiner choices (%s)', (locale) => {
+    const html = render(presetDoc('wichtelcup'), locale, 'rules');
+    const t = createTranslator(formatStudioPrimitivesMessages, locale);
+    expect(html).toContain(esc(t('option.draw_admin')));
+    expect(html).toContain(esc(t('option.draw_event')));
+    expect(html).toContain(esc(t('option.late_joiners_splice')));
+    expectLabelledControls(html);
+  });
+
   it('the part prop shows one list at a time', () => {
     const doc = presetDoc();
     const rules = render(doc, 'en', 'rules');

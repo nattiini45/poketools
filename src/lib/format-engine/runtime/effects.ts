@@ -227,6 +227,7 @@ class Planner {
         if (relation.shape === 'manual') return this.issue('relation_manual', relation.key);
         if (this.state.links.some((l) => l.relation === relation.key) || this.generated.has(relation.key)) return;
         this.generated.add(relation.key);
+        if (relation.draw === 'admin') return;
         const links = generateRelationLinks(relation, this.roster, this.base.seed);
         if (links.length === 0) return this.issue('relation_roster_too_small', relation.key);
         return this.push({ op: 'set_relation', relation: relation.key, links });

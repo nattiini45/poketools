@@ -118,6 +118,8 @@ export default {
   /** A legacy draft derives every seat from the roster (20261102140000), so the roster is frozen while it is in progress. */
   SEASON_DRAFT_LOCKED:
     'A draft is in progress, and its pick order follows the roster, so trainers cannot be added, removed or substituted now. End the draft, or move it back to pending, to change the roster.',
+  SEASON_ROSTER_RELATION_ASSIGNED:
+    'This trainer already has a format assignment. Removing them would break the existing draw.',
   SEATS_INVALID: 'The draft order is invalid.',
   INVALID_CONFIG: 'Invalid setting: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft Kill Tokens cannot be bought now.',

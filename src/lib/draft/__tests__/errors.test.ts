@@ -50,6 +50,7 @@ const DESIGN_CODES = [
   'SEASON_GROUP_SEATS_STALE',
   // legacy roster lock (20261102140000)
   'SEASON_DRAFT_LOCKED',
+  'SEASON_ROSTER_RELATION_ASSIGNED',
 ] as const;
 
 /** Params column of §9 (placeholders of the en message). */

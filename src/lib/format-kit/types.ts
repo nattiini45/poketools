@@ -80,7 +80,7 @@ export interface Stage {
 }
 
 export type ParticipantsSelector =
-  | { from: 'roster'; seeding: 'rating' | 'random' | 'manual' | 'signup'; expected_count?: number }
+  | { from: 'roster'; seeding: 'rating' | 'random' | 'manual' | 'signup'; expected_count?: number; enrollment?: 'manual' | 'league_roster' }
   | { from: 'edges'; seeding: 'edge_order' | 'rating' | 'random' | 'manual' };
 
 export interface GroupsSpec {
@@ -336,6 +336,9 @@ export interface RelationDef {
   key: Key;
   label: LText;
   shape: 'derangement' | 'pairs' | 'manual';
+  /** An absent mode preserves both triggers for existing formats. */
+  draw?: 'event' | 'admin';
+  late_joiners?: 'manual' | 'splice';
   /** default { from: 'hidden', to: 'own' } */
   visibility: { from: RelationVisibility; to: RelationVisibility };
   reveal_on?: EventSpec;

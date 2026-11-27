@@ -228,16 +228,26 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
                 </table>
               </div>
             )}
-            {canReveal && relation.link_count === 0 && relation.shape !== 'manual' && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className={BUTTON_TOUCH}
-                aria-label={t('relations.drawAria', { relation: labelText(relation.label, locale, relation.key) })}
-                onClick={() => setDrawing(relation)}
-              >
-                {t('relations.draw')}
-              </Button>
+            {canReveal && relation.link_count === 0 && relation.shape !== 'manual' && relation.draw !== 'event' && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-fg">{t('relations.drawRoster', { count: roster.length })}</p>
+                {roster.length === 0 ? (
+                  <p className="text-sm text-fg-muted">{t('relations.drawRosterEmpty')}</p>
+                ) : (
+                  <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-muted" role="list">
+                    {roster.map((player) => <li key={player.id}>{refName(player)}</li>)}
+                  </ul>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className={BUTTON_TOUCH}
+                  aria-label={t('relations.drawAria', { relation: labelText(relation.label, locale, relation.key) })}
+                  onClick={() => setDrawing(relation)}
+                >
+                  {t('relations.draw')}
+                </Button>
+              </div>
             )}
             {canReveal && relation.link_count > 0 && !isRevealed(relation) && (
               <Button
@@ -330,7 +340,7 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
         title={drawing === null ? '' : t('relations.drawTitle', { relation: labelText(drawing.label, locale, drawing.key) })}
         message={
           <>
-            <p>{t('relations.drawBody')}</p>
+            <p>{t(drawing?.late_joiners === 'splice' ? 'relations.drawBodySplice' : 'relations.drawBody')}</p>
             <p className="font-semibold text-fg">{t('relations.drawRoster', { count: roster.length })}</p>
             {roster.length === 0 ? (
               <p>{t('relations.drawRosterEmpty')}</p>

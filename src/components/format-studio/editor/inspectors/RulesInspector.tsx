@@ -226,6 +226,43 @@ export default function RulesInspector({ doc, diagnostics, authorBase, onChange,
           </section>
         )}
 
+        {part !== 'text' && doc.relations?.map((relation, i) => {
+          if (relation.shape === 'manual') return null;
+          const update = (changes: Pick<typeof relation, 'draw' | 'late_joiners'>) => onChange({
+            ...doc, relations: doc.relations?.map((item, index) => index === i ? { ...item, ...changes } : item),
+          });
+          return (
+            <fieldset key={relation.key} className="min-w-0 rounded-poke-lg border border-hairline p-4">
+              <legend className="px-1 font-heading font-semibold text-fg">{preview(relation.label, relation.key)}</legend>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <SelectField
+                  pointer={ptr('relations', i, 'draw')}
+                  label={p('field.relation_draw')}
+                  value={relation.draw ?? ''}
+                  options={[
+                    { value: '', label: p('option.draw_default') },
+                    { value: 'admin', label: p('option.draw_admin') },
+                    { value: 'event', label: p('option.draw_event') },
+                  ]}
+                  onChange={(draw) => update({ draw: draw === 'event' || draw === 'admin' ? draw : undefined })}
+                />
+                {relation.shape === 'derangement' && (
+                  <SelectField
+                    pointer={ptr('relations', i, 'late_joiners')}
+                  label={p('field.late_joiners')}
+                    value={relation.late_joiners ?? 'manual'}
+                    options={[
+                      { value: 'manual', label: p('option.late_joiners_manual') },
+                      { value: 'splice', label: p('option.late_joiners_splice') },
+                    ]}
+                    onChange={(value) => update({ late_joiners: value === 'splice' ? 'splice' : 'manual' })}
+                  />
+                )}
+              </div>
+            </fieldset>
+          );
+        })}
+
         {part !== 'rules' && (
           <section className="min-w-0 space-y-3" aria-labelledby="fe-sections-heading">
             <h3 id="fe-sections-heading" className="font-heading text-base font-semibold text-fg">

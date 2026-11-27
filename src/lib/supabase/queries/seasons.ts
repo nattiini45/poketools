@@ -555,10 +555,15 @@ export async function getSeasonParticipantGymTypes(
 }
 
 export async function addSeasonParticipant(seasonId: string, playerId: string): Promise<void> {
-  const { error } = await supabase
-    .from('season_participants')
-    .insert({ season_id: seasonId, player_id: playerId });
-  if (error) throw error;
+  const { error } = await supabase.rpc('season_participant_add', { p_season_id: seasonId, p_player_id: playerId });
+  if (error) throw mapFormatDbError(error);
+}
+
+export async function syncFormatLeagueRoster(seasonId: string, native: boolean): Promise<void> {
+  const { error } = await supabase.rpc('format__sync_league_roster', {
+    p_season_id: seasonId, p_native: native,
+  });
+  if (error) throw mapFormatDbError(error);
 }
 
 // Removing a trainer goes through `removeLeagueParticipant` (queries/season-groups.ts, RPC

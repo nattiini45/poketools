@@ -328,6 +328,7 @@ describe('DELETE /api/seasons/[id]/participants', () => {
     ['SEASON_GROUP_LOCKED', 409],
     ['SEASON_GROUP_TOO_SMALL', 422],
     ['SEASON_DRAFT_LOCKED', 409],
+    ['SEASON_ROSTER_RELATION_ASSIGNED', 409],
   ] as const)('the group and draft rules refuse the removal: %s -> %i, the cache is not expired', async (code, status) => {
     vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
     vi.mocked(removeLeagueParticipant).mockRejectedValue(new DraftRuleError(code));

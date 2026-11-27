@@ -8,11 +8,12 @@ const names = { a: 'A', b: 'B', c: 'C', d: 'D' };
 const pairKey = (p: { player_1_id: string; player_2_id: string }) => [p.player_1_id, p.player_2_id].sort().join('-');
 
 function input(pairing: Pairing, over: Partial<KitPairingInput> = {}): KitPairingInput {
-  const stage: Pick<Stage, 'key' | 'pairing' | 'scoring' | 'rank'> = {
+  const stage: Pick<Stage, 'key' | 'pairing' | 'scoring' | 'rank' | 'participants'> = {
     key: 'stage',
     pairing,
     scoring: { win: 1, loss: 0, bye: 1 },
     rank: [],
+    participants: { from: 'roster', seeding: 'manual' },
   };
   return { stage, participantIds: ids, participantNames: names, matches: [], pairedMatches: [], byeHistory: [], roundNumber: 1, ...over };
 }
@@ -71,6 +72,27 @@ describe('roundRobinLegRound', () => {
 });
 
 describe('pairNextRound', () => {
+  it('seeds round one from the complete synced roster using the format seed', () => {
+    const base = input({ kind: 'swiss', rounds: 6, avoid_repeats: true });
+    const synced: KitPairingInput = {
+      ...base,
+      stage: { ...base.stage, participants: { from: 'roster', enrollment: 'league_roster', seeding: 'random' } },
+      participantIds: [...ids, 'late-before-start'],
+      seed: 'winter',
+    };
+    const result = pairNextRound(synced);
+    expect(result).toEqual(pairNextRound({ ...synced, participantIds: [...synced.participantIds].reverse() }));
+    expect(result).toEqual(pairNextRound({
+      ...synced,
+      stage: { ...synced.stage, participants: { from: 'roster', enrollment: 'manual', seeding: 'random' } },
+    }));
+    expect(result.kind).toBe('round');
+    if (result.kind !== 'round') throw new Error('Expected a generated Swiss round');
+    expect([...result.round.pairings.flatMap((pair) => [pair.player_1_id, pair.player_2_id]), ...result.round.bye_player_ids].sort())
+      .toEqual(synced.participantIds);
+    expect(pairNextRound({ ...synced, seed: 'different-winter' })).not.toEqual(result);
+  });
+
   it('leaves manual and elimination stages to the admin and the bracket engine', () => {
     expect(pairNextRound(input({ kind: 'manual' }))).toEqual({ kind: 'manual' });
     expect(pairNextRound(input({ kind: 'single_elim', third_place: true }))).toEqual({ kind: 'bracket' });

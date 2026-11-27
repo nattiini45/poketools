@@ -243,6 +243,7 @@ const PARTICIPANTS: Spec = {
       tag: 'roster',
       spec: variant('from', 'roster', [
         req('seeding', oneOf('rating', 'random', 'manual', 'signup')),
+        opt('enrollment', oneOf('manual', 'league_roster')),
         opt('expected_count', int(2, MAX_EXPECTED_COUNT)),
       ]),
     },
@@ -366,6 +367,8 @@ const RELATION_DEF = obj([
   req('key', KEY),
   req('label', LTEXT),
   req('shape', oneOf('derangement', 'pairs', 'manual')),
+  opt('draw', oneOf('event', 'admin')),
+  opt('late_joiners', oneOf('manual', 'splice')),
   dflt('visibility', obj([req('from', RELATION_VISIBILITY), req('to', RELATION_VISIBILITY)]), { from: 'hidden', to: 'own' }),
   opt('reveal_on', EVENT_SPEC),
 ]);

@@ -137,7 +137,7 @@ export function kitPairsRounds(stage: Pick<Stage, 'pairing'>): boolean {
 }
 
 export interface KitPairingInput {
-  stage: Pick<Stage, 'key' | 'pairing' | 'scoring' | 'rank'>;
+  stage: Pick<Stage, 'key' | 'pairing' | 'scoring' | 'rank' | 'participants'>;
   /** Players in seed order. */
   participantIds: string[];
   participantNames: Record<string, string>;
@@ -202,6 +202,12 @@ export function pairNextRound(input: KitPairingInput): KitPairingResult {
     ...input.tableExtras,
   });
   const ranked = table.map((row) => row.player_id);
+  const { seed } = input;
+  if (seed != null && swissOf(pairing) !== null && roundNumber === 1 && stage.participants?.from === 'roster'
+      && stage.participants.seeding === 'random') {
+    const scope = `stage:${stage.key}:first-round`;
+    ranked.sort((a, b) => seededRand(seed, scope, a) - seededRand(seed, scope, b) || a.localeCompare(b));
+  }
 
   if (pairing.kind === 'bipartite') {
     if (input.sides === undefined) throw new Error('pairNextRound: a bipartite stage needs sides');

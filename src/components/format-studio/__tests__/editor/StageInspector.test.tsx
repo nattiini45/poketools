@@ -39,6 +39,13 @@ const words = (locale: Locale) => ({
 });
 
 describe('StageInspector: sections', () => {
+  it.each(['en', 'de'] as const)('offers automatic league enrollment for roster stages (%s)', (locale) => {
+    const doc = presetDoc('cup');
+    const option = esc(words(locale).p('option.enrollment_league_roster'));
+    expect(render(doc, 0, locale)).toContain(option);
+    expect(render(doc, 1, locale)).not.toContain(option);
+  });
+
   it.each(['en', 'de'] as const)('shows every section in %s, with the stage name as the heading', (locale) => {
     const doc = presetDoc();
     const html = render(doc, 0, locale);

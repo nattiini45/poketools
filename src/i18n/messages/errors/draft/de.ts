@@ -97,6 +97,8 @@ export default defineDe<typeof en>()({
     'Die Trainer dieser Gruppe haben sich seit dem Einrichten des Drafts geändert, deshalb passen seine Plätze nicht mehr zur Gruppe. Lösche den Draft, der noch nicht gestartet ist, und lege ihn neu an.',
   SEASON_DRAFT_LOCKED:
     'Ein Draft läuft gerade, und seine Pick-Reihenfolge folgt dem Kader, deshalb lassen sich jetzt keine Trainer hinzufügen, entfernen oder ersetzen. Beende den Draft oder setze ihn auf „Ausstehend“ zurück, um den Kader zu ändern.',
+  SEASON_ROSTER_RELATION_ASSIGNED:
+    'Dieser Trainer hat bereits eine Zuweisung im Format. Beim Entfernen wäre die bestehende Auslosung ungültig.',
   SEATS_INVALID: 'Die Draft-Reihenfolge ist ungültig.',
   INVALID_CONFIG: 'Ungültige Einstellung: {field}.',
   TOKEN_WINDOW_CLOSED: 'Draft-Kill-Tokens kannst du gerade nicht kaufen.',

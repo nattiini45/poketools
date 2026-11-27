@@ -93,6 +93,8 @@ export const DIAGNOSTIC_CODES = [
   'domain_attr_duplicate',
   'domain_attr_value_invalid',
   'relation_roster_too_small',
+  'relation_draw_invalid',
+  'relation_splice_invalid',
   'resource_exclusive_needs_domain',
   'metric_key_builtin',
   'tunable_values_mismatch',
@@ -170,6 +172,8 @@ export interface Diagnostic {
 }
 
 const ERROR_CODES: readonly DiagnosticCode[] = [
+  'relation_draw_invalid',
+  'relation_splice_invalid',
   'schema_required',
   'schema_type',
   'schema_enum',

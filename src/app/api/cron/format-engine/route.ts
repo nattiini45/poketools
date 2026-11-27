@@ -10,11 +10,37 @@
 import { NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { runFormatCronPass, type FormatCronSummary } from '@/lib/format-engine/runtime/cron';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { logger } from '@/lib/logger';
 import { secretsEqual } from '@/lib/utils/crypto';
 import type { ApiResult } from '@/types/api';
 
 export const maxDuration = 300;
+
+async function runNativeFormatCronPass() {
+  const [
+    { createNativePhaseServices }, { createNativeFormatCronPass }, { expireSeasonReads, revalidatePhaseMatchPages },
+    { listPhaseTeams }, { submitAction }, { expireChallenges }, { purgeFormatNotifications },
+  ] = await Promise.all([
+    import('@/lib/league-phase/services'), import('@/lib/league-phase/format-cron'), import('@/lib/revalidation'),
+    import('@/lib/supabase/queries/phase-teams'), import('@/lib/format-engine/runtime/actions-server'),
+    import('@/lib/format-engine/challenge-server'), import('@/lib/supabase/queries/format-notifications'),
+  ]);
+  const { matches } = createNativePhaseServices({
+    invalidateMatch: revalidatePhaseMatchPages,
+    invalidateSeason: (season, phaseIds) => expireSeasonReads(season, { phaseIds }),
+    invalidateWiki: (phase) => revalidatePhaseMatchPages(phase),
+  });
+  return createNativeFormatCronPass({
+    services: matches,
+    kit: matches.kit,
+    listTeams: (id) => listPhaseTeams({ kind: 'phase', id }),
+    submitAction,
+    expireChallenges,
+    purgeNotifications: purgeFormatNotifications,
+    revalidate: revalidatePhaseMatchPages,
+  })();
+}
 
 async function handle(request: Request) {
   const authHeader = request.headers.get('authorization');
@@ -36,7 +62,7 @@ async function handle(request: Request) {
   }
 
   try {
-    const summary = await runFormatCronPass();
+    const summary = await requireOpenPhaseRouteMode() === 'phase' ? await runNativeFormatCronPass() : await runFormatCronPass();
     if (summary.failures > 0) {
       logger.error('cron/format-engine', 'run finished with failures', { summary });
       return NextResponse.json<ApiResult<never>>(

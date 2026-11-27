@@ -120,7 +120,7 @@ Admin — `is_admin: true` in Players DB
 | core_pool | JSONB | Curated list of allowed type triples for Core Liga; null when unused |
 | language | Text | `de` / `en`, default `de`: content language for text produced without a viewer (Discord embeds, social images and posts, stored AI reports, overlays opened without `?lang=`). Viewers always see their own UI language (§17). Migration `20261012023655_seasons_language.sql` |
 
-**`season_participants`** (junction) — the **league roster**; single source of truth for who belongs to the league. Phase enrollment (`tournament_participants`) draws from this roster. Substitutes: `scope: 'league'` swaps roster membership and non-completed phase enrollments; `scope: <phaseId>` swaps phase enrollment only (reserve promotion allowed). Either way the incoming player takes the outgoing player's phase slot: seed, starting bracket and group row. See `POST /api/seasons/[id]/participants/substitute`.
+**`season_participants`** (junction) — the **league roster** and single source of truth for who belongs to the league. Phase enrollment draws from this roster. `joined_at` records when a roster seat was added for signup seeding. Older seats without a recorded time sort first, with player ID breaking ties. Substitutes: `scope: 'league'` swaps roster membership and non-completed phase enrollments; `scope: <phaseId>` swaps phase enrollment only (reserve promotion allowed). Either way the incoming player takes the outgoing player's phase slot: seed, starting bracket and group row. See `POST /api/seasons/[id]/participants/substitute`.
 | Field | Type | Notes |
 |---|---|---|
 | season_id | UUID | Reference → Seasons |
