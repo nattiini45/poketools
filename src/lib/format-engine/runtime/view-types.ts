@@ -26,6 +26,7 @@ export interface EntryView {
   /** @pkmn species id (display via `<PkmnName kind="species">`). */
   id: string;
   attrs: { key: string; value: string | number | boolean | string[] }[];
+  detail?: LText;
 }
 
 /** The pick domains of the actionable steps, each ONCE (not per step). Only domains whose entries the viewer may see. */
@@ -67,6 +68,7 @@ export interface StepView {
   domain_label: LText;
   count: number;
   distinct_attr: string | null;
+  distinct_attr_label?: LText;
   unlocked: boolean;
   /** `[]` unless the step is actionable. */
   blocked: BlockedEntry[];

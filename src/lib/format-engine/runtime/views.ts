@@ -146,7 +146,11 @@ export function toSubmissionView(row: { status: string; picks: unknown }): Submi
 }
 
 function entryView(entry: DomainEntry): EntryView {
-  return { id: entry.id, attrs: entry.attrs.map((attr) => ({ key: attr.key, value: Array.isArray(attr.value) ? [...attr.value] : attr.value })) };
+  return {
+    id: entry.id,
+    attrs: entry.attrs.map((attr) => ({ key: attr.key, value: Array.isArray(attr.value) ? [...attr.value] : attr.value })),
+    ...(entry.detail !== undefined && { detail: entry.detail }),
+  };
 }
 
 /** The viewer's submission of an action (the runtime state holds the submissions of everyone). */
@@ -237,6 +241,7 @@ function buildAction(ctx: KitContext, rule: PlayerActionRule, viewer: string, na
         if (held.has(entry.id)) blocked.push({ id: entry.id, reason: 'taken' });
       }
     }
+    const distinctAttr = def.attributes?.find(({ key }) => key === step.distinct_attr);
     return {
       index,
       resource: step.resource,
@@ -245,6 +250,7 @@ function buildAction(ctx: KitContext, rule: PlayerActionRule, viewer: string, na
       domain_label: labelOf(domainDef?.label, step.domain),
       count: step.count,
       distinct_attr: step.distinct_attr ?? null,
+      ...(distinctAttr !== undefined && { distinct_attr_label: distinctAttr.label }),
       unlocked: domainView?.unlocked ?? false,
       blocked,
     };
