@@ -257,10 +257,10 @@ function evaluateOne(constraint: TeamConstraint, index: number, input: Constrain
         return out;
       }
       if (below) {
-        issue('kit_count_min', { source, min: constraint.min, have: matches.length });
+        issue('kit_count_min', { source, min, have: matches.length });
       }
       if (above) {
-        issue('kit_count_max', { source, max: constraint.max, have: matches.length }, matches);
+        issue('kit_count_max', { source, max, have: matches.length }, matches);
       }
       return out;
     }
