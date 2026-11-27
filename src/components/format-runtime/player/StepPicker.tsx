@@ -7,6 +7,7 @@ import SkewChip from '@/components/ui/SkewChip';
 import { cn } from '@/lib/utils/cn';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
+import { distinctAttrKey, selectedDistinctAttrKeys } from '@/lib/format-engine/runtime/domains';
 import type { EntryView, StepView } from '@/lib/format-engine/runtime/view-types';
 import { entryMatchesSearch } from './entry-names';
 import { EntrySprite } from './parts';
@@ -46,6 +47,9 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
 
   const single = step.count === 1;
   const full = selected.length >= step.count;
+  const chosenValues = selectedDistinctAttrKeys(entries, step.distinct_attr, selected);
+  const distinctValues = new Set(chosenValues);
+  const hasConflict = distinctValues.size < chosenValues.length;
   const blocked = new Map(step.blocked.map((entry) => [entry.id, entry.reason]));
   const visible = entries.filter((entry) => entryMatchesSearch(entry.id, query));
 
@@ -60,9 +64,10 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
         {t('step.heading', { number: step.index + 1, resource: labelOf(step.resource_label) })}
       </legend>
       <p className="clear-both self-start" data-step-counter>
-        <SkewChip tone={full ? 'win' : 'neutral'}>{t('step.counter', { picked: selected.length, count: step.count })}</SkewChip>
+        <SkewChip tone={full && !hasConflict ? 'win' : 'neutral'}>{t('step.counter', { picked: selected.length, count: step.count })}</SkewChip>
       </p>
       {step.distinct_attr !== null && <p className="text-caption text-fg-muted">{t('step.distinct', { attr: step.distinct_attr })}</p>}
+      {hasConflict && <p className="text-caption text-loss">{t('issue.distinct_attr_duplicate')}</p>}
       {!step.unlocked ? (
         <p className="text-body text-fg-muted">{t('step.locked')}</p>
       ) : entries.length === 0 ? (
@@ -83,7 +88,10 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
               {visible.map((entry) => {
                 const checked = selected.includes(entry.id);
                 const reason = takenIds?.has(entry.id) ? 'taken' : blocked.get(entry.id);
-                const rowDisabled = !checked && (reason !== undefined || (!single && full));
+                const value = step.distinct_attr === null ? undefined : distinctAttrKey(entry, step.distinct_attr);
+                const sameValue = !checked && !single && value !== undefined && distinctValues.has(value);
+                const rowDisabled = !checked && (reason !== undefined || (!single && full) || sameValue);
+                const note = reason === 'taken' ? t('step.taken') : reason === 'not_eligible' ? t('step.notEligible') : sameValue ? t('step.sameValue') : null;
                 const inputId = `${groupName}-${entry.id}`;
                 const noteId = `${inputId}-note`;
                 const attrs = entry.attrs.map(attrText).filter((text): text is string => text !== null);
@@ -95,8 +103,8 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
                       name={groupName}
                       checked={checked}
                       disabled={rowDisabled}
-                      aria-describedby={attrs.length > 0 || reason !== undefined ? noteId : undefined}
-                      onChange={() => toggle(entry.id)}
+                      aria-describedby={attrs.length > 0 || note !== null ? noteId : undefined}
+                      onChange={() => { if (!rowDisabled) toggle(entry.id); }}
                       className="size-4 shrink-0 cursor-pointer accent-accent-fill disabled:cursor-not-allowed"
                     />
                     <EntrySprite id={entry.id} size={32} className={rowDisabled ? 'opacity-50' : undefined} />
@@ -109,9 +117,9 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
                           {text}
                         </Badge>
                       ))}
-                      {reason !== undefined && (
+                      {note !== null && (
                         <span className="text-caption text-fg-muted">
-                          {reason === 'taken' ? t('step.taken') : t('step.notEligible')}
+                          {note}
                         </span>
                       )}
                     </span>

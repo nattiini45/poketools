@@ -48,6 +48,7 @@ export default defineDe<typeof en>()({
     noMatches: 'Kein Eintrag passt zu deiner Suche.',
     locked: 'Diese Liste ist noch nicht freigeschaltet.',
     distinct: 'Deine Wahlen müssen sich in {attr} unterscheiden.',
+    sameValue: 'In deiner Auswahl schon vertreten',
     taken: 'Von jemand anderem vergeben',
     notEligible: 'Für dich nicht verfügbar',
   },

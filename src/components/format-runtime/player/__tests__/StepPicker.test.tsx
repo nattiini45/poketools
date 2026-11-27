@@ -94,6 +94,27 @@ describe('StepPicker', () => {
     expect(screen.getByText(t('step.counter', { picked: 1, count: 2 }))).toBeTruthy();
   });
 
+  it('blocks another Pokémon of the chosen role even when search hides the first choice', async () => {
+    const role = [{ key: 'primary_role', value: 'hazard_removal' }];
+    const entries = [entry('bergmite', role), entry('prinplup', role), entry('delibird', [{ key: 'primary_role', value: 'hazard_setter' }])];
+    function RolePicker() {
+      const [selected, setSelected] = useState<string[]>([]);
+      return <StepPicker step={step({ distinct_attr: 'primary_role' })} entries={entries} selected={selected} onChange={setSelected} />;
+    }
+    render(withI18n(<RolePicker />));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('checkbox', { name: 'Bergmite' }));
+    await user.type(screen.getByRole('searchbox'), 'prinplup');
+    const prinplup = screen.getByRole<HTMLInputElement>('checkbox', { name: 'Prinplup' });
+    expect(prinplup.disabled).toBe(true);
+    await user.click(prinplup);
+    expect(prinplup.checked).toBe(false);
+    await user.clear(screen.getByRole('searchbox'));
+    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Delibird' }).disabled).toBe(false);
+    await user.click(screen.getByRole('checkbox', { name: 'Bergmite' }));
+    expect(screen.getByRole<HTMLInputElement>('checkbox', { name: 'Prinplup' }).disabled).toBe(false);
+  });
+
   it('a locked list and an empty list say so instead of showing a picker', () => {
     const locked = setup(step({ unlocked: false }));
     expect(screen.getByText(locked.t('step.locked'))).toBeTruthy();

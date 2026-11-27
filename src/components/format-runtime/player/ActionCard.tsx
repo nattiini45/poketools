@@ -14,6 +14,7 @@ import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import { actionSubmissionMachine } from '@/lib/format-engine/runtime/action-state';
 import { saveActionRequest, submitActionRequest } from '@/lib/format-engine/runtime/client-api';
+import { selectedDistinctAttrKeys } from '@/lib/format-engine/runtime/domains';
 import type { ActionPick } from '@/lib/format-engine/runtime/types';
 import type { ActionView, DomainEntriesView, EntryView, SubmissionState } from '@/lib/format-engine/runtime/view-types';
 import ActionIssues from './ActionIssues';
@@ -75,7 +76,16 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
   const editable = canAct && (state !== 'submitted' || editing);
   const canSaveDraft = state === 'none' || actionSubmissionMachine.can(state, 'draft', 'player');
   const stepsReady = action.steps.every((step) => step.unlocked);
-  const complete = action.steps.every((step) => picksOfStep(picks, step.index).length === step.count);
+  const steps = action.steps.map((step) => ({
+    step,
+    entries: domains.find((domain) => domain.key === step.domain)?.entries ?? NO_ENTRIES,
+    selected: picksOfStep(picks, step.index),
+  }));
+  const complete = steps.every(({ step, selected }) => selected.length === step.count);
+  const distinct = steps.every(({ step, entries, selected }) => {
+    const keys = selectedDistinctAttrKeys(entries, step.distinct_attr, selected);
+    return new Set(keys).size === keys.length;
+  });
 
   // Entries the last answer said someone else took, per step: the picker marks those rows.
   const takenByStep = new Map<number, Set<string>>();
@@ -236,12 +246,12 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
 
       {editable && (
         <div ref={editorRef} className="flex flex-col gap-4">
-          {action.steps.map((step) => (
+          {steps.map(({ step, entries, selected }) => (
             <StepPicker
               key={step.index}
               step={step}
-              entries={domains.find((domain) => domain.key === step.domain)?.entries ?? NO_ENTRIES}
-              selected={picksOfStep(picks, step.index)}
+              entries={entries}
+              selected={selected}
               onChange={(ids) => setStepPicks(step.index, ids)}
               takenIds={takenByStep.get(step.index)}
               disabled={pending}
@@ -262,11 +272,11 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
         <div className="flex flex-wrap items-center gap-3">
           {editable ? (
             <>
-              <PlateButton onClick={askToSubmit} disabled={pending || !stepsReady || !complete}>
+              <PlateButton onClick={askToSubmit} disabled={pending || !stepsReady || !distinct || !complete}>
                 {state === 'submitted' ? t('buttons.submitAgain') : t('buttons.submit')}
               </PlateButton>
               {canSaveDraft && (
-                <PlateButton tone="secondary" onClick={() => void save()} disabled={pending || !stepsReady || picks.length === 0}>
+                <PlateButton tone="secondary" onClick={() => void save()} disabled={pending || !stepsReady || !distinct || picks.length === 0}>
                   {t('buttons.saveDraft')}
                 </PlateButton>
               )}
