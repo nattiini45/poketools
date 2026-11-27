@@ -197,6 +197,8 @@ export interface AdminDomainView {
 export interface AdminRelationView extends RelationView {
   masked: boolean;
   link_count: number;
+  draw?: 'event' | 'admin';
+  late_joiners?: 'manual' | 'splice';
 }
 
 /** The history shows all seven kinds. */

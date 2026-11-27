@@ -397,6 +397,8 @@ describe('RelationsAdmin: draw', () => {
   it('shows the roster and its count before the irreversible draw', async () => {
     const user = userEvent.setup();
     mount({ relations: [undrawn()] });
+    expect(screen.getByText('Players in the draw (4)')).toBeTruthy();
+    expect(screen.getByText('Misty')).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Draw Secret Santa' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Players in the draw (4)')).toBeTruthy();
@@ -438,6 +440,9 @@ describe('RelationsAdmin: draw', () => {
   });
 
   it('is offered only for a relation without links that the server can draw', () => {
+    const eventDraw = mount({ relations: [relationView({ link_count: 0, draw: 'event' })] });
+    expect(screen.queryByRole('button', { name: /^Draw/ })).toBeNull();
+    eventDraw.unmount();
     const manual = mount({ relations: [relationView({ link_count: 0, shape: 'manual' })] });
     expect(screen.queryByRole('button', { name: /^Draw/ })).toBeNull();
     manual.unmount();

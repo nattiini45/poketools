@@ -4,6 +4,9 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PLAYERS, SEED, giftDef, link, stateFor } from './helpers';
+import { wichtelcup } from '@/lib/format-kit/presets/wichtelcup';
+import { generateRelationLinks } from '../relations';
+import { buildPlayerView } from '../views';
 
 vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../load')>()),
@@ -60,6 +63,43 @@ beforeEach(() => {
   vi.mocked(loadFreshKitContext).mockResolvedValue(context());
   vi.mocked(saveFormatAction).mockResolvedValue(row);
   vi.mocked(submitFormatAction).mockResolvedValue(row);
+});
+
+it('offers choose_gifts after assignment and submits two junk gifts and a premium gift to the drawn player', async () => {
+  const def = structuredClone(wichtelcup);
+  const santa = def.relations?.find((relation) => relation.key === 'santa');
+  if (!santa) throw new Error('Expected a Santa relation');
+  const roster = ['p1', 'p2', 'p3'];
+  const ctx: KitContext = {
+    ...context(), def,
+    state: stateFor(def, { flags: { 'action:choose_gifts': 'open' } }),
+    phases: [{ id: 'swiss-phase', stage: def.stages[0], members: roster }],
+  };
+  const names = new Map(roster.map((id) => [id, id]));
+  const view = () => {
+    const player = buildPlayerView(ctx, 'p1', names, [], new Date());
+    if (!player.running) throw new Error('Expected a running kit format');
+    return player.actions.find((entry) => entry.id === 'choose_gifts');
+  };
+  expect(view()).toMatchObject({ accessible: false, actionable: false });
+
+  ctx.state.links = generateRelationLinks(santa, roster, SEED).map(({ from, to }) => link(from, to));
+  const recipient = ctx.state.links.find((entry) => entry.from === 'p1')?.to;
+  expect(view()).toMatchObject({ accessible: true, actionable: true, target: { id: recipient } });
+  vi.mocked(loadFreshKitContext).mockResolvedValue(ctx);
+  const giftPicks = [
+    { step: 0, item_id: 'starmie' },
+    { step: 0, item_id: 'golem' },
+    { step: 1, item_id: 'dragonite' },
+  ];
+  const request = { ...action, actionId: 'choose_gifts', picks: giftPicks };
+  await expect(submitAction(request)).resolves.toMatchObject({ ok: true, giverHidden: true });
+  expect(submitFormatAction).toHaveBeenCalledWith(expect.objectContaining({ targetId: recipient, picks: giftPicks, lock: true }));
+
+  ctx.state.flags['action:choose_gifts'] = 'locked';
+  expect(view()).toMatchObject({ actionable: false });
+  await expect(submitAction(request)).resolves.toMatchObject({ ok: false, issues: [{ code: 'window_closed' }] });
+  expect(submitFormatAction).toHaveBeenCalledTimes(1);
 });
 
 describe('saveAction over an earlier submission', () => {

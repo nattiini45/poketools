@@ -106,6 +106,8 @@ export default {
     domain_attr_duplicate: 'The entry {id} of the domain {domain} sets {attr} more than once.',
     domain_attr_value_invalid: 'The value of {attr} on the entry {id} of the domain {domain} does not fit: {reason}.',
     relation_roster_too_small: 'The relation {relation} needs at least two players, but the roster has {roster}.',
+    relation_draw_invalid: 'The draw mode for {relation} must match its shape and triggers. Admin draws need relation adjustments enabled. Event draws need a draw effect.',
+    relation_splice_invalid: 'Adding players to the draw for {relation} needs a derangement and at least one stage enrolled from the league roster.',
     resource_exclusive_needs_domain: 'The resource {resource} cannot be exclusive because it is a counter; only resources that hold a domain can.',
     metric_key_builtin: 'The key {metric} is already a built-in metric.',
     tunable_values_mismatch: 'The values of the tunable {tunable} are not valid: {reason}.',

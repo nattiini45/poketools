@@ -1,14 +1,12 @@
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
-import { loadKitPhase } from '@/lib/format-engine/load';
-import { assertNoOpenRoundBeforeNext, assertPhaseReadyForFirstRound, isKitEnginePhase, wantsForcedStart } from '@/lib/format-engine/route-guards';
+import { assertNoOpenRoundBeforeNext, assertPhaseReadyForFirstRound, isKitEnginePhase, loadKitPhaseOfTournament, wantsForcedStart } from '@/lib/format-engine/route-guards';
 import { roundDeadlineIso } from '@/lib/format-engine/runtime/calendar';
 import { fireEvent } from '@/lib/format-engine/runtime/fire';
 import { onNativePhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import { phaseById } from '@/lib/format-engine/runtime/load';
 import { roundsBoundReached } from '@/lib/format-engine/runtime/stage-end';
 import { checkStageEnd } from '@/lib/format-engine/runtime/stage-end-server';
-import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { logger } from '@/lib/logger';
 import { getNativeKitMatchFacts } from '@/lib/supabase/queries/phase-format-runtime';
 import { getRoundsByPhase, updatePhaseRoundDeadline } from '@/lib/supabase/queries/phase-rounds';
@@ -21,9 +19,8 @@ export async function prepareManualKitRound(
   request: Request, season: Season, phase: Phase, rounds: PhaseRound[], actor: SessionPlayer,
 ) {
   if (season.format_type !== 'custom') return null;
-  await assertSeasonFormatAttached(season.id);
   const { matches: { kit } } = nativeRoundServices(phase);
-  const loaded = await loadKitPhase(season.id, phase.id, kit.storage);
+  const loaded = await loadKitPhaseOfTournament({ ...phase, season_format_type: season.format_type }, kit.storage);
   if (!isKitEnginePhase(loaded)) return null;
   await assertNoOpenRoundBeforeNext(phase.id, loaded, rounds, getNativeKitMatchFacts);
   const context = await kit.eventPort.load(season.id);

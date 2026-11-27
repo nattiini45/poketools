@@ -9,7 +9,8 @@ import 'server-only';
 
 import { cache } from 'react';
 import type { FormatDefinition, Stage } from '@/lib/format-kit/types';
-import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
+import { legacyKitStorage, nativeKitRuntimeReads, type KitRuntimeReads } from '@/lib/league-phase/kit-storage';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import type { Json } from '@/types/database';
 import { stageOf } from '../load';
 import type { EnvBase } from './expr-env';
@@ -59,8 +60,13 @@ export function envBaseOf(ctx: Pick<KitContext, 'def' | 'state' | 'seed'>, scope
   return { def: ctx.def, state: ctx.state, seed: ctx.seed, scope };
 }
 
+async function runtimeReads(): Promise<KitRuntimeReads> {
+  return await requireOpenPhaseRouteMode() === 'phase' ? nativeKitRuntimeReads : legacyKitStorage;
+}
+
 /** The context of a league whose attached format runs on the `kit` engine, or null (no format, or another engine). */
-export async function loadFreshKitContext(seasonId: string, storage: KitStoragePort = legacyKitStorage): Promise<KitContext | null> {
+export async function loadFreshKitContext(seasonId: string, storage?: KitRuntimeReads): Promise<KitContext | null> {
+  storage ??= await runtimeReads();
   const format = await storage.format(seasonId);
   if (format === null || format.engine !== 'kit') return null;
   const [phaseRows, runtime] = await Promise.all([storage.phases(seasonId), storage.runtime(seasonId)]);
@@ -88,7 +94,8 @@ export const loadKitContext = cache(loadFreshKitContext);
  * an engine switch, so a read of them must still know who plays and which relations are hidden: otherwise switching the
  * engine would lift the masks without the audited unmask.
  */
-export async function loadMaskContext(seasonId: string, storage: KitStoragePort = legacyKitStorage): Promise<MaskContext | null> {
+export async function loadMaskContext(seasonId: string, storage?: KitRuntimeReads): Promise<MaskContext | null> {
+  storage ??= await runtimeReads();
   const format = await storage.format(seasonId);
   if (format === null) return null;
   const [phaseRows, runtime] = await Promise.all([storage.phases(seasonId), storage.runtime(seasonId)]);

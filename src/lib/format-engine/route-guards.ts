@@ -24,15 +24,27 @@ import { onRoundGenerated } from './runtime/hooks';
 import { loadFreshKitContext, rosterOf, type KitContext } from './runtime/load';
 import { assertStageNotEnded } from './runtime/stage-end-server';
 import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
+import { syncFormatLeagueRoster } from '@/lib/supabase/queries/seasons';
 
 /**
  * The kit phase a tournament is, or null when it is not a phase of a custom league (or the format does not run it).
  * A custom league without an attached format cannot start: refused before any round is written.
  */
-export async function loadKitPhaseOfTournament(tournament: HookTournament, storage: KitStoragePort = legacyKitStorage): Promise<KitPhase | null> {
+export async function loadKitPhaseOfTournament(tournament: HookTournament & { status?: string }, storage: KitStoragePort = legacyKitStorage): Promise<KitPhase | null> {
+  const { status } = tournament;
   if (!isKitCandidate(tournament)) return null;
   await assertSeasonFormatAttached(tournament.season_id);
-  return loadKitPhase(tournament.season_id, tournament.id, storage);
+  const phase = await loadKitPhase(tournament.season_id, tournament.id, storage);
+  if (phase?.engine === 'kit' && status === 'upcoming' && syncsLeagueRoster(phase)) {
+    await syncFormatLeagueRoster(tournament.season_id, storage !== legacyKitStorage);
+    return loadKitPhase(tournament.season_id, tournament.id, storage);
+  }
+  return phase;
+}
+
+export function syncsLeagueRoster(phase: KitPhase): boolean {
+  const selector = phase.stage.participants;
+  return selector?.from === 'roster' && selector.enrollment === 'league_roster';
 }
 
 /** Whether the phase is paired by the kit engine itself (not the legacy pairing of a shadow or legacy league). */

@@ -285,6 +285,7 @@ export default {
     drawBody:
       'The links are drawn on the server from the league seed and cannot be changed afterwards. Nobody sees who was drawn for whom, you included, unless you show the hidden sides. A player who is not on this list when you draw gets no link in this relation for the rest of the league. This is recorded with your reason.',
     drawRoster: 'Players in the draw ({count})',
+    drawBodySplice: 'The league seed assigns one recipient to each player. Late joiners are inserted into the existing draw. Hidden links are visible only when explicitly shown. Your reason is recorded.',
     drawRosterEmpty: 'Nobody is on the roster yet, so there is nothing to draw.',
     drawConfirmLabel: 'Type {count} to confirm that this list is complete',
     drawn: '{relation} drawn.',

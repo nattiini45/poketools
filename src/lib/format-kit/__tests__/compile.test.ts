@@ -7,10 +7,25 @@ import { classicLeague } from '../presets/classic-league';
 import { cup } from '../presets/cup';
 import { PRESETS } from '../presets';
 import { swissTopCut } from '../presets/swiss-top-cut';
+import { wichtelcup } from '../presets/wichtelcup';
 import type { FormatDefinition } from '../types';
 import { fixtureDiagnostics, mutate, NEGATIVE_FIXTURES, rosterEnv } from './fixtures/negative';
 
 const errors = (list: readonly Diagnostic[]) => list.filter((d) => d.severity === 'error');
+
+it('validates the roster, draw trigger and splice choices together', () => {
+  const def = structuredClone(wichtelcup);
+  def.stages[0].participants = { from: 'roster', seeding: 'random', enrollment: 'league_roster' };
+  def.relations = def.relations?.map((relation) => ({ ...relation, draw: 'admin', late_joiners: 'splice' }));
+  expect(compile(def).ok).toBe(true);
+
+  def.stages[0].participants = { from: 'roster', seeding: 'random' };
+  def.relations = def.relations?.map((relation) => ({ ...relation, draw: 'event' }));
+  expect(errors(compile(def).diagnostics)).toEqual(expect.arrayContaining([
+    expect.objectContaining({ code: 'relation_draw_invalid', json_pointer: '/relations/0/draw' }),
+    expect.objectContaining({ code: 'relation_splice_invalid', json_pointer: '/relations/0/late_joiners' }),
+  ]));
+});
 
 describe('presets', () => {
   it.each(PRESETS.map((p) => [p.id, p.definition] as const))('%s compiles cleanly without a roster size', (_id, def) => {

@@ -31,10 +31,10 @@ const fixture = (id: string) => {
 };
 
 describe('diagnostic vocabulary', () => {
-  it('lists 102 distinct codes', () => {
-    expect(DIAGNOSTIC_CODES).toHaveLength(102);
+  it('lists 104 distinct codes', () => {
+    expect(DIAGNOSTIC_CODES).toHaveLength(104);
     expect(new Set(DIAGNOSTIC_CODES).size).toBe(DIAGNOSTIC_CODES.length);
-    expect(DIAGNOSTIC_SEVERITY.size).toBe(102);
+    expect(DIAGNOSTIC_SEVERITY.size).toBe(104);
   });
 
   it('is quoted by the docs with the catalogue size', () => {

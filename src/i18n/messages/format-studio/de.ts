@@ -96,6 +96,8 @@ export default defineDe<typeof en>()({
     domain_attr_duplicate: 'Der Eintrag {id} der Domäne {domain} setzt {attr} mehrfach.',
     domain_attr_value_invalid: 'Der Wert von {attr} beim Eintrag {id} der Domäne {domain} passt nicht: {reason}.',
     relation_roster_too_small: 'Die Beziehung {relation} braucht mindestens zwei Spieler, aber der Kader hat {roster}.',
+    relation_draw_invalid: 'Der Auslosungsmodus für {relation} muss zur Form und zu den Auslösern passen. Eine Admin-Auslosung braucht erlaubte Beziehungsanpassungen, eine Ereignis-Auslosung einen Auslosungseffekt.',
+    relation_splice_invalid: 'Nachrücker für {relation} erfordern eine Auslosung im Kreis und mindestens eine Phase mit Anmeldung aus der Ligateilnehmerliste.',
     resource_exclusive_needs_domain: 'Die Ressource {resource} kann nicht exklusiv sein, weil sie ein Zähler ist; das geht nur bei Ressourcen, die eine Domäne halten.',
     metric_key_builtin: 'Der Schlüssel {metric} ist bereits eine eingebaute Kennzahl.',
     tunable_values_mismatch: 'Die Werte des Reglers {tunable} sind ungültig: {reason}.',

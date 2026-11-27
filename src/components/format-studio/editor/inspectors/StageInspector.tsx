@@ -387,6 +387,20 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
               onChange={(value) => edit((s) => setSeeding(s, value))}
             />
             {stage.participants.from === 'roster' && (
+              <SelectField
+                pointer={ptr('stages', index, 'participants', 'enrollment')}
+                label={p('field.enrollment')}
+                value={stage.participants.enrollment ?? 'manual'}
+                options={[
+                  { value: 'manual', label: p('option.enrollment_manual') },
+                  { value: 'league_roster', label: p('option.enrollment_league_roster') },
+                ]}
+                onChange={(value) => edit((s) => s.participants.from === 'roster'
+                  ? { ...s, participants: { ...s.participants, enrollment: value === 'league_roster' ? 'league_roster' : 'manual' } }
+                  : s)}
+              />
+            )}
+            {stage.participants.from === 'roster' && (
               <NumberField
                 pointer={ptr('stages', index, 'participants', 'expected_count')}
                 label={p('field.expected_count')}

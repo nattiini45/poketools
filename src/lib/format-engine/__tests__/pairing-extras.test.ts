@@ -21,6 +21,7 @@ function swissRound2(over: Partial<KitPairingInput> = {}, rank: Stage['rank'] = 
   const result = pairNextRound({
     stage: {
       key: 'swiss',
+      participants: { from: 'roster', seeding: 'manual' },
       pairing: { kind: 'swiss', rounds: 3, avoid_repeats: true },
       scoring: { win: 3, loss: 0, bye: 0 },
       rank,
@@ -67,7 +68,13 @@ describe('a Swiss round counts games like the standings', () => {
   const rank: Stage['rank'] = [{ kind: 'metric', metric: 'games_played', direction: 'desc' }];
   const round = (tableExtras?: KitPairingInput['tableExtras']) => {
     const result = pairNextRound({
-      stage: { key: 'swiss', pairing: { kind: 'swiss', rounds: 3, avoid_repeats: true }, scoring: { win: 3, loss: 0, bye: 0 }, rank },
+      stage: {
+        key: 'swiss',
+        participants: { from: 'roster', seeding: 'manual' },
+        pairing: { kind: 'swiss', rounds: 3, avoid_repeats: true },
+        scoring: { win: 3, loss: 0, bye: 0 },
+        rank,
+      },
       participantIds: six,
       participantNames: Object.fromEntries(six.map((id) => [id, id.toUpperCase()])),
       matches: sixHistory,

@@ -22,6 +22,7 @@ const mockBuilder = vi.hoisted(() => {
     mb[m] = vi.fn().mockReturnValue(mb);
   }
   mb.single = vi.fn();
+  mb.rpc = vi.fn();
   mb.maybeSingle = vi.fn();
   return mb;
 });
@@ -582,17 +583,16 @@ describe('seasons', () => {
 
   // ── addSeasonParticipant ────────────────────────────────────────
   describe('addSeasonParticipant', () => {
-    it('inserts participant record', async () => {
-      mockBuilder.insert.mockReturnValue({ error: null });
+    it('adds the league participant through the enrollment transaction', async () => {
+      mockBuilder.rpc.mockReturnValue({ error: null });
 
       await addSeasonParticipant('s1', 'p1');
 
-      expect(mockBuilder.from).toHaveBeenCalledWith('season_participants');
-      expect(mockBuilder.insert).toHaveBeenCalledWith({ season_id: 's1', player_id: 'p1' });
+      expect(mockBuilder.rpc).toHaveBeenCalledWith('season_participant_add', { p_season_id: 's1', p_player_id: 'p1' });
     });
 
     it('throws on database error', async () => {
-      mockBuilder.insert.mockReturnValue({ error: dbError });
+      mockBuilder.rpc.mockReturnValue({ error: dbError });
       await expect(addSeasonParticipant('s1', 'p1')).rejects.toEqual(dbError);
     });
   });

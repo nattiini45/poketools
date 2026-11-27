@@ -9459,6 +9459,19 @@ export type Database = {
         Args: { p_resource: string; p_season_id: string }
         Returns: number
       }
+      format__splice_roster_player: {
+        Args: {
+          p_player_id: string
+          p_season_id: string
+          p_seed: string
+          p_spec: Json
+        }
+        Returns: undefined
+      }
+      format__sync_league_roster: {
+        Args: { p_native: boolean; p_player_id?: string; p_season_id: string }
+        Returns: undefined
+      }
       format_action_save: {
         Args: {
           p_action_key: string
@@ -10635,6 +10648,10 @@ export type Database = {
       season_groups_replace: {
         Args: { p_groups: Json; p_season_id: string }
         Returns: Json
+      }
+      season_participant_add: {
+        Args: { p_player_id: string; p_season_id: string }
+        Returns: undefined
       }
       season_participant_remove: {
         Args: { p_player_id: string; p_season_id: string }

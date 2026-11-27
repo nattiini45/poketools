@@ -486,6 +486,8 @@ export function buildAdminOverview(
     ...relationView(relation, state.links, { playerId: adminId, admin: false }, names),
     masked: true,
     link_count: state.links.filter((l) => l.relation === relation.key).length,
+    draw: relation.draw,
+    late_joiners: relation.late_joiners,
   }));
   return {
     running: true,

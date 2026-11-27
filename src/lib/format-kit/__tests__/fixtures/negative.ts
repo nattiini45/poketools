@@ -499,6 +499,13 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     env: rosterEnv(1),
     params: { relation: 'santa', roster: 1 },
   }),
+  fx('error', 'relation-draw-invalid', 'relation_draw_invalid', '/relations/0/draw', mutate(G, [
+    { op: 'add', path: '/relations/0/draw', value: 'admin' },
+    { op: 'replace', path: '/relations/0/shape', value: 'manual' },
+  ]), { params: { relation: 'santa' } }),
+  fx('error', 'relation-splice-invalid', 'relation_splice_invalid', '/relations/0/late_joiners', mutate(G, [
+    { op: 'add', path: '/relations/0/late_joiners', value: 'splice' },
+  ]), { params: { relation: 'santa' } }),
   fx('error', 'resource-exclusive-needs-domain', 'resource_exclusive_needs_domain', '/resources/1/exclusive', mutate(G, [
     { op: 'replace', path: '/resources/1/exclusive', value: 'global' },
   ]), { params: { resource: 'coins' } }),

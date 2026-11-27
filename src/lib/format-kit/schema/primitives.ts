@@ -213,6 +213,7 @@ export const participantsSchema = z.discriminatedUnion('from', [
   z.strictObject({
     from: z.literal('roster'),
     seeding: z.enum(['rating', 'random', 'manual', 'signup']),
+    enrollment: z.enum(['manual', 'league_roster']).optional(),
     expected_count: intRange(2, MAX_EXPECTED_COUNT).optional(),
   }),
   z.strictObject({
@@ -483,6 +484,8 @@ export const relationDefSchema = z.strictObject({
   key: keySchema,
   label: ltextSchema,
   shape: z.enum(['derangement', 'pairs', 'manual']),
+  draw: z.enum(['event', 'admin']).optional(),
+  late_joiners: z.enum(['manual', 'splice']).optional(),
   visibility: z
     .strictObject({ from: relationVisibility, to: relationVisibility })
     .default(() => ({ from: 'hidden' as const, to: 'own' as const })),

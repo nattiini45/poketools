@@ -57,6 +57,26 @@ export const legacyKitStorage: KitStoragePort = {
 
 export type NativeKitConsumers = Pick<KitStoragePort, 'outcomes' | 'matchIds' | 'gameCounts' | 'kills' | 'enroll'>;
 export type KitReadStoragePort = Omit<KitStoragePort, 'enroll'>;
+export type KitRuntimeReads = Pick<KitStoragePort, 'format' | 'runtime' | 'phases' | 'members'>;
+
+export const nativeKitRuntimeReads: KitRuntimeReads = {
+  format: (input) => getSeasonFormat(input),
+  runtime: (input) => getFormatRuntime(input),
+  phases: async (id) => {
+    const { getPhasesBySeasonId } = await import('@/lib/supabase/queries/league-phases');
+    return (await getPhasesBySeasonId(id)).flatMap((phase) => phase.format_stage_key === null ? [] : [{
+      id: phase.id,
+      format_stage_key: phase.format_stage_key,
+      format_group: phase.format_group,
+      stage_order: phase.stage_order,
+      stage_spec: phase.stage_spec,
+    }]);
+  },
+  members: async (ids) => {
+    const { getPhaseParticipantsBatch } = await import('@/lib/supabase/queries/league-phases');
+    return [...await getPhaseParticipantsBatch([...ids])].flatMap(([id, players]) => players.map((player) => ({ phase_id: id, player_id: player.id })));
+  },
+};
 
 export function nativeKitStorage(consumers: NativeKitConsumers): KitStoragePort {
   return { ...nativeKitReadStorage(consumers), enroll: consumers.enroll };
@@ -69,24 +89,9 @@ export function nativeKitReadStorage(consumers: Omit<NativeKitConsumers, 'enroll
     gameCounts: consumers.gameCounts,
     kills: consumers.kills,
     head: (input) => getSeasonKitHead(input),
-    format: (input) => getSeasonFormat(input),
-    runtime: (input) => getFormatRuntime(input),
+    ...nativeKitRuntimeReads,
     adjustments: (input) => getStandingAdjustments(input),
     ratings: (input) => getPlayerRatingsBatch(input),
-    phases: async (id) => {
-      const { getPhasesBySeasonId } = await import('@/lib/supabase/queries/league-phases');
-      return (await getPhasesBySeasonId(id)).flatMap((phase) => phase.format_stage_key === null ? [] : [{
-        id: phase.id,
-        format_stage_key: phase.format_stage_key,
-        format_group: phase.format_group,
-        stage_order: phase.stage_order,
-        stage_spec: phase.stage_spec,
-      }]);
-    },
-    members: async (ids) => {
-      const { getPhaseParticipantsBatch } = await import('@/lib/supabase/queries/league-phases');
-      return [...await getPhaseParticipantsBatch([...ids])].flatMap(([id, players]) => players.map((player) => ({ phase_id: id, player_id: player.id })));
-    },
     seeds: async (ids) => {
       const { getPhaseParticipantsBatch } = await import('@/lib/supabase/queries/league-phases');
       return getPhaseParticipantsBatch([...ids]);

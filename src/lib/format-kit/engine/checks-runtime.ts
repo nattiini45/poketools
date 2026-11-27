@@ -196,7 +196,22 @@ function checkDomains(out: Diagnostic[], lookup: Lookup): void {
 
 function checkRelations(out: Diagnostic[], lookup: Lookup): void {
   const roster = lookup.env.rosterSize;
+  const { def } = lookup;
+  const canAdjust = def.rules.some((rule) => rule.kind === 'adjust.manual' && rule.allow.includes('relation'));
+  const eventDraws = new Set(def.rules.flatMap((rule) => rule.kind === 'rule.on_event'
+    ? rule.effects.flatMap((effect) => effect.effect === 'generate_relation' ? [effect.relation] : [])
+    : []));
+  const autoEnrolls = def.stages.some((stage) => stage.participants.from === 'roster'
+    && stage.participants.enrollment === 'league_roster');
   (lookup.def.relations ?? []).forEach((relation, i) => {
+    if (relation.draw !== undefined && (relation.shape === 'manual'
+        || (relation.draw === 'admin' && (!canAdjust || eventDraws.has(relation.key)))
+        || (relation.draw === 'event' && !eventDraws.has(relation.key)))) {
+      out.push(diag('relation_draw_invalid', ptr('relations', i, 'draw'), { relation: relation.key }));
+    }
+    if (relation.late_joiners === 'splice' && (relation.shape !== 'derangement' || !autoEnrolls)) {
+      out.push(diag('relation_splice_invalid', ptr('relations', i, 'late_joiners'), { relation: relation.key }));
+    }
     if (relation.shape === 'derangement' && roster !== undefined && roster < 2) {
       out.push(diag('relation_roster_too_small', ptr('relations', i, 'shape'), { relation: relation.key, roster }));
     }
