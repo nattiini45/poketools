@@ -22,6 +22,9 @@ export interface PlayerRef {
   name: string | null;
 }
 
+/** Deep link to the participant pool overview on the play page. */
+export const PLAYER_POOL_SECTION_ID = 'pokemon-pools';
+
 export interface EntryView {
   /** @pkmn species id (display via `<PkmnName kind="species">`). */
   id: string;

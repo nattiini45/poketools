@@ -10,10 +10,11 @@ import { useLText, usePlayerName } from './useLabels';
 
 export interface ItemsSectionProps {
   items: readonly ItemView[];
+  id?: string;
 }
 
 /** What the viewer holds, per resource: a domain item by name, a counter by its amount. */
-export default function ItemsSection({ items }: ItemsSectionProps) {
+export default function ItemsSection({ items, id }: ItemsSectionProps) {
   const t = useT(formatRuntimePlayerMessages);
   const labelOf = useLText();
   const nameOf = usePlayerName();
@@ -22,7 +23,7 @@ export default function ItemsSection({ items }: ItemsSectionProps) {
   for (const item of items) groups.set(item.resource, [...(groups.get(item.resource) ?? []), item]);
 
   return (
-    <PlayerSection title={t('items.heading')} icon="amulet-coin">
+    <PlayerSection id={id} title={t('items.heading')} icon="amulet-coin">
       <div className="flex flex-col gap-4">
         {[...groups.entries()].map(([resource, rows]) => (
           <div key={resource} className={PLAYER_CARD}>

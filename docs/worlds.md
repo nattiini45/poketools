@@ -29,6 +29,8 @@ Four 3D route-themed worlds are registered:
   through an explicit admin pin or a viewer override.
 - **`clouds`** — the sky-island chain; matches NO format, pin/override only.
 
+The public page of a `custom` league uses the selected theme's DOM sections for Pulse, Schedule and Rules. It omits the classic roster and Teams anchors and keeps the fixed-station 3D scene off.
+
 A DOM-only **`default`** world (anchored sections `#pulse #phases #reports
 #stats #rules`, no route theme) remains as the fallback for a league pinned to
 an unregistered theme id. It is deliberately **not exported**;
@@ -322,8 +324,9 @@ src/components/world/
 - **`resolveRouteTheme(id)`** — `src/components/world/themes/index.ts`: id →
   `RouteThemeDefinition`, null for unknown/absent ids (DOM-only worlds).
 - **`WorldShell`** — applies `data-world={tokenNamespace}`, installs
-  `WorldStateProvider` and mounts `RouteSceneRecovery` and `BallLoader` once
-  for every world (both inert on DOM-only worlds).
+ `WorldStateProvider` and mounts `RouteSceneRecovery` and `BallLoader` once
+  for every world (both inert in Lite-only or DOM-only worlds). Custom leagues pass
+  `liteOnly` and keep the resolved theme for the palette and theme switcher.
 - **`WorldStateProvider`** — conductor (route progress), tier, `scenePhase`,
   palette (theme `paletteExtension` merged over the token-derived core,
   extension wins), the SERVER-resolved theme, `setRouteThemeOverride` (the

@@ -62,16 +62,20 @@ export default async function MountainWorld({
       <PulseSection data={view} locale={locale}>
         {hub}
       </PulseSection>
-      <RosterSection data={view} locale={locale} dataLocale={dataLocale} />
-      <TeamsSection data={view} locale={locale} dataLocale={dataLocale} />
+      {world.sections.some(({ id }) => id === 'roster') && (
+        <RosterSection data={view} locale={locale} dataLocale={dataLocale} />
+      )}
+      {world.sections.some(({ id }) => id === 'teams') && (
+        <TeamsSection data={view} locale={locale} dataLocale={dataLocale} />
+      )}
       <ScheduleSection data={view} locale={locale} />
       <RulesSection data={view} locale={locale} />
-      <ThemeOverlays
+      {world.routeThemeId && !world.liteOnly && <ThemeOverlays
         data={view}
         locale={locale}
         dataLocale={dataLocale}
         rulesCopy={(formatRules, rulesetName, context) => plaqueCopy(formatRules, rulesetName, context, locale)}
-      />
+      />}
       <Suspense fallback={null}>
         <FocusUrlSync />
       </Suspense>

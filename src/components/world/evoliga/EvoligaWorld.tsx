@@ -88,8 +88,12 @@ export default async function EvoligaWorld({
       >
         {hub}
       </PulseSection>
-      <RosterSection entries={entries} hasListBound={league.point_buy_list_id !== null} locale={locale} />
-      <TeamsSection participants={participants} trackers={trackers} entries={entries} locale={locale} dataLocale={dataLocale} />
+      {world.sections.some(({ id }) => id === 'roster') && (
+        <RosterSection entries={entries} hasListBound={league.point_buy_list_id !== null} locale={locale} />
+      )}
+      {world.sections.some(({ id }) => id === 'teams') && (
+        <TeamsSection participants={participants} trackers={trackers} entries={entries} locale={locale} dataLocale={dataLocale} />
+      )}
       <ScheduleSection stages={stages} fixtures={fixtures} standings={standings} locale={locale} />
       {/* The contract's rulesetName: the season's, else the first stage's.
           The league's format (not the row) picks the body. */}
@@ -101,7 +105,7 @@ export default async function EvoligaWorld({
         locale={locale}
         dataLocale={dataLocale}
       />
-      <EvoligaOverlays
+      {world.routeThemeId && !world.liteOnly && <EvoligaOverlays
         league={league}
         stages={stages}
         participants={participants}
@@ -113,7 +117,7 @@ export default async function EvoligaWorld({
         rulesetName={data.rulesetName}
         locale={locale}
         dataLocale={dataLocale}
-      />
+      />}
       <Suspense fallback={null}>
         <FocusUrlSync />
       </Suspense>

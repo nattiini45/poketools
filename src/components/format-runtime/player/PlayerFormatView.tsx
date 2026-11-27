@@ -6,7 +6,7 @@ import ItemIcon from '@/components/ui/ItemIcon';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import { loadMyFormatView } from '@/lib/format-engine/runtime/client-api';
-import type { PlayerFormatView as PlayerFormatViewData } from '@/lib/format-engine/runtime/view-types';
+import { PLAYER_POOL_SECTION_ID, type PlayerFormatView as PlayerFormatViewData } from '@/lib/format-engine/runtime/view-types';
 import type { ActionStatus } from './ActionCard';
 import ActionsSection from './ActionsSection';
 import type { LadderStatus } from './ChallengeRow';
@@ -14,6 +14,7 @@ import ItemsSection from './ItemsSection';
 import LadderSection from './LadderSection';
 import PoolsSection from './PoolsSection';
 import RelationsSection from './RelationsSection';
+import { PLAYER_SECTION_LINK } from './parts';
 
 export interface PlayerFormatViewProps {
   seasonId: string;
@@ -26,6 +27,8 @@ export interface PlayerFormatViewProps {
 }
 
 type Status = ActionStatus | LadderStatus | 'reloading';
+
+const PLAYER_ITEMS_SECTION_ID = 'format-items';
 
 /**
  * The player's page of a running custom league. It owns the `view`; the ONLY way the view is refreshed is `reload()`
@@ -85,6 +88,11 @@ export default function PlayerFormatView({ seasonId, viewerId, initialView, clos
         {status === null ? '' : t(`status.${status}`)}
       </div>
       {reloadFailed && <Alert variant="warning">{t('status.reloadFailed')}</Alert>}
+      {hasPoolOverview && (
+        <a href={`#${PLAYER_POOL_SECTION_ID}`} className={PLAYER_SECTION_LINK}>
+          {t('pools.heading')}
+        </a>
+      )}
       {empty && (
         <div className="flex items-center gap-4 rounded-poke-lg border border-hairline bg-surface p-4 sm:p-5">
           <ItemIcon item="poke-doll" size={48} />
@@ -95,11 +103,11 @@ export default function PlayerFormatView({ seasonId, viewerId, initialView, clos
         <ActionsSection seasonId={seasonId} actions={view.actions} domains={view.domains} closed={closed} onReload={reload} onStatus={announce} />
       )}
       {hasRelations && <RelationsSection relations={view.relations} viewerId={viewerId} />}
-      {hasItems && <ItemsSection items={view.items} />}
+      {hasItems && <ItemsSection id={PLAYER_ITEMS_SECTION_ID} items={view.items} />}
       {view.ladders.length > 0 && (
         <LadderSection seasonId={seasonId} ladders={view.ladders} viewerId={viewerId} closed={closed} onReload={reloadQuietly} onStatus={announce} />
       )}
-      <PoolsSection pools={view.pools} />
+      <PoolsSection pools={view.pools} itemsSectionId={hasItems ? PLAYER_ITEMS_SECTION_ID : undefined} />
     </div>
   );
 }

@@ -57,14 +57,14 @@ interface WorldShellProps {
 export default function WorldShell({ world, worldExperience, routeData, children }: WorldShellProps) {
   const themed = world.tokenNamespace !== 'default';
   const stationIds = world.sections.map((section) => section.id);
-  const route = Boolean(world.routeThemeId);
+  const route = Boolean(world.routeThemeId) && !world.liteOnly;
   const digestFacts = route && routeData ? stationDigestFacts(routeData) : undefined;
 
   return (
     <div
       data-world={world.tokenNamespace}
       {...(themed ? { 'data-frozen': 'world' } : {})}
-      {...(world.routeThemeId ? { 'data-world-route': '' } : {})}
+      {...(route ? { 'data-world-route': '' } : {})}
       className={`world world-${world.tokenNamespace} ${themed ? 'relative text-arena-ink' : ''}`}
     >
       {themed && (
@@ -77,6 +77,7 @@ export default function WorldShell({ world, worldExperience, routeData, children
       <WorldStateProvider
         stationIds={stationIds}
         routeThemeId={world.routeThemeId}
+        liteOnly={world.liteOnly}
         worldExperience={worldExperience}
       >
         {children}

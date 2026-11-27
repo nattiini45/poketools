@@ -67,6 +67,19 @@ export async function getSeasonFormatSummary(seasonId: string): Promise<SeasonFo
   return data ? toSummary(data as unknown as SummaryRow) : null;
 }
 
+/** Only the existence of a public overview is used by the league hub. */
+export async function hasPublicFormatPoolOverview(seasonId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('season_formats')
+    .select('season_id')
+    .eq('season_id', seasonId)
+    .eq('engine', 'kit')
+    .contains('spec->domains', JSON.stringify([{ visibility: 'public', overview: {} }]))
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
 /**
  * Switch the engine that runs the league's attached format from `from` (the engine the caller read) to `to`, as an
  * admin (`seasonFormatEngineMachine`). The UPDATE is guarded with `from`, so a switch another admin made in between is

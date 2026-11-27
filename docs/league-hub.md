@@ -21,6 +21,8 @@ src/lib/league-hub/
 - **`copy.ts`** — `leagueHubCopy(locale)`: the words live in the `league-hub` namespace; status, bracket-type and format labels come from `enums`, stored engine round names go through `translateEngineLabel`.
 - **`hero.ts`** — pure: reads only the world payload the league page already holds, so the hero costs no query.
 
+Custom leagues link to the authenticated player page. For a signed-in participant in a running kit league with a public pool overview, the hub also links directly to its pools section. The hub queries only whether a public overview exists. The player page controls which pools and holdings are shown.
+
 ## Testing
 
 - **Test Files — `src/lib/league-hub/`**: `src/lib/league-hub/__tests__/` (6 test files): `copy.test.ts`, `hero.test.ts`, `load.test.ts`, `tabs.test.ts`, `views-display.test.ts`, `views.test.ts`.

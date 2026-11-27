@@ -64,7 +64,7 @@ describe('PlayerFormatView: what it shows', () => {
   });
 
   it('searches the available pool cards and displays localized details and exact levels', async () => {
-    const { user, t } = setup(runningView({ actions: [], pools: [
+    const { user, t } = setup(runningView({ actions: [], items: [item({ item_id: 'eevee' })], pools: [
       {
         key: 'regular', label: ltext('en', 'Regular pool'), unlocked: true,
         overview: { entries: [{ id: 'pikachu', detail: ltext('en', 'Attacker', 'Angreifer') }] },
@@ -75,6 +75,8 @@ describe('PlayerFormatView: what it shows', () => {
       },
     ] }), { locale: 'de' });
     expect(screen.getByRole('heading', { level: 2, name: t('pools.heading') })).toBeTruthy();
+    expect(screen.getByRole('link', { name: t('pools.heading') }).getAttribute('href')).toBe('#pokemon-pools');
+    expect(screen.getByRole('link', { name: t('items.heading') }).getAttribute('href')).toBe('#format-items');
     expect(screen.getByText('Angreifer')).toBeTruthy();
     expect(screen.getByText('Use two bonus Pokémon.')).toBeTruthy();
     expect(screen.getByText(t('pools.exactLevel', { level: 88 }))).toBeTruthy();

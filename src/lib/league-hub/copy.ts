@@ -52,6 +52,7 @@ export interface LeagueHubCopy {
     phasePage: string;
     /** The player's page of a custom league (`/dashboard/leagues/{id}/play`). */
     play: string;
+    playerPools: string;
   };
   table: {
     rank: string;
