@@ -684,13 +684,21 @@ export function uncoveredFiles(block, files) {
   return files.filter((f) => !matchers.some((re) => re.test(f)));
 }
 
+// Top-level files of a module, in the extensions treeMatchers can cover (issue #363 — the .tsx?-only
+// enumeration used to hide a top-level .mjs file: src/lib/security/csp-policy.mjs was compared by
+// nobody). Other file kinds (.json data files) stay outside both sides of the comparison.
 const topLevelFiles = (name) =>
   publicFiles(`src/lib/${name}`)
-    .filter((f) => f.split('/').length === 4 && /\.tsx?$/.test(f))
+    .filter((f) => f.split('/').length === 4 && /\.(tsx?|mjs)$/.test(f))
     .map((f) => f.split('/').pop());
 
+// Every test file under the directory, recursively (issue #364 — direct children only used to hide a
+// nested suite: 8 files under src/lib/ruleset-studio/__tests__/editor/ were counted and named by
+// nobody). Deliberate scope: a sub-package's own suite directory (src/lib/<module>/<sub>/__tests__/)
+// sits outside the module's own __tests__ tree and is not reached — whether one belongs in its
+// module doc is a documentation decision per module, not this enumerator's.
 const testFilesIn = (dir) =>
-  publicFiles(dir).filter((f) => posix.dirname(f) === dir && /\.test\.(tsx?|mjs)$/.test(f));
+  publicFiles(dir).filter((f) => f.startsWith(`${dir}/`) && /\.test\.(tsx?|mjs)$/.test(f));
 
 describe('module docs: file structure trees', () => {
   const allDocFiles = publicFiles('docs')

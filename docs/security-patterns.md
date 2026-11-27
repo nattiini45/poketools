@@ -126,6 +126,7 @@ Request-body schemas are Zod, in `src/lib/validation/schemas.ts` ([`validation.m
 
 ```
 src/lib/security/
+├── csp-policy.mjs   # buildNoncePolicy/buildStaticPolicy/newNonce: the two CSP policies (the CSP section above)
 └── csp-report.ts    # What POST /api/csp-report keeps of a CSP violation report: one short JSON line, nothing stored
 ```
 
