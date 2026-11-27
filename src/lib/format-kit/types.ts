@@ -300,6 +300,10 @@ export interface DomainDef {
   initially: 'locked' | 'unlocked';
   /** default 'public' */
   visibility: 'public' | 'when_unlocked' | 'admins';
+  /** Opt in to the participant pool browser, with optional rules shown at the same visibility as the entries. */
+  overview?: { rules?: LText };
+  /** Restrict team counts to the listed species and explicit aliases. By default a base entry also matches its formes. */
+  listed_species_only?: boolean;
 }
 
 export interface DomainEntry {
@@ -307,6 +311,12 @@ export interface DomainEntry {
   id: Key;
   /** 0..16, default [] */
   attrs: EntryAttr[];
+  /** Other formes permitted by this entry. They do not create additional pool entries. */
+  aliases?: Key[];
+  /** Mandatory level in kit team checks while the pool is visible and unlocked. */
+  exact_level?: number;
+  /** Optional localized detail displayed in the pool overview. */
+  detail?: LText;
 }
 
 export interface EntryAttr {

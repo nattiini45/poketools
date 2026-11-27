@@ -95,10 +95,15 @@ export function finalLeaguePlacings<T extends { player_id: string }>(
   const playoffs = stages.filter(isPlayoffStage);
   if (playoffs.length === 0) return undefined;
   const ranks = new Map<string, number>();
+  let offset = 0;
   for (const stage of playoffs) {
-    for (const [id, rank] of playoffRanks(stage, recordsByStage.get(stage.id) ?? [])) ranks.set(id, rank);
+    const bracketRanks = playoffRanks(stage, recordsByStage.get(stage.id) ?? []);
+    if (bracketRanks.size === 0) return undefined;
+    // Only independent brackets add another block of places.
+    if ([...bracketRanks.keys()].some((id) => ranks.has(id))) break;
+    for (const [id, rank] of bracketRanks) ranks.set(id, offset + rank);
+    offset += bracketRanks.size;
   }
-  if (ranks.size === 0) return undefined;
   const placed = groupTable.filter((row) => ranks.has(row.player_id));
   placed.sort((a, b) => ranks.get(a.player_id)! - ranks.get(b.player_id)!);
   const rest = groupTable.filter((row) => !ranks.has(row.player_id));

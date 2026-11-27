@@ -12,6 +12,7 @@ import ActionsSection from './ActionsSection';
 import type { LadderStatus } from './ChallengeRow';
 import ItemsSection from './ItemsSection';
 import LadderSection from './LadderSection';
+import PoolsSection from './PoolsSection';
 import RelationsSection from './RelationsSection';
 
 export interface PlayerFormatViewProps {
@@ -75,7 +76,8 @@ export default function PlayerFormatView({ seasonId, viewerId, initialView, clos
 
   const hasRelations = view.relations.length > 0;
   const hasItems = view.items.length > 0;
-  const empty = view.actions.length === 0 && !hasRelations && !hasItems && view.ladders.length === 0;
+  const hasPoolOverview = view.pools.some((pool) => pool.overview !== undefined);
+  const empty = view.actions.length === 0 && !hasRelations && !hasItems && view.ladders.length === 0 && !hasPoolOverview;
 
   return (
     <div className="flex flex-col gap-6">
@@ -97,6 +99,7 @@ export default function PlayerFormatView({ seasonId, viewerId, initialView, clos
       {view.ladders.length > 0 && (
         <LadderSection seasonId={seasonId} ladders={view.ladders} viewerId={viewerId} closed={closed} onReload={reloadQuietly} onStatus={announce} />
       )}
+      <PoolsSection pools={view.pools} />
     </div>
   );
 }

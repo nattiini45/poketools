@@ -56,6 +56,26 @@ describe('bracket places, not points across phases', () => {
     expect([...ranks]).toEqual([['Meteor', 1], ['Nova', 2], ['Comet', 3]]);
   });
 
+  it('places two independent five-player brackets in stage order after both finals', () => {
+    const upper = { ...stage, id: 'upper', participant_count: 5 };
+    const lower = { ...upper, id: 'lower' };
+    const upperRecords = [
+      record(1, '4', '5', '5'), record(2, '1', '5', '5'), record(2, '2', '3', '3', 1), record(3, '5', '3', '5'),
+    ];
+    const lowerRecords = [
+      record(1, '9', '10', '10'), record(2, '6', '10', '10'), record(2, '7', '8', '8', 1), record(3, '10', '8', '10'),
+    ];
+    const table = Array.from({ length: 10 }, (_, i) => ({ player_id: String(i + 1), points: 10 - i }));
+    const records = new Map([[upper.id, upperRecords], [lower.id, lowerRecords.slice(0, -1)]]);
+    expect(finalLeaguePlacings(table, [upper, lower], records)).toBeUndefined();
+    records.set(lower.id, lowerRecords);
+    const placings = finalLeaguePlacings(table, [upper, lower], records);
+    expect(placings?.map(({ player_id, rank }) => [player_id, rank])).toEqual([
+      ['5', 1], ['3', 2], ['1', 3], ['2', 3], ['4', 5],
+      ['10', 6], ['8', 7], ['6', 8], ['7', 8], ['9', 10],
+    ]);
+  });
+
   it('keeps non-qualifiers in the original group-table order, without mutating the table', () => {
     const table = ['Rocket', 'Comet', 'Pulsar', 'Nova', 'Meteor', 'Orbit', 'Quasar', 'Solar', 'Zenith', 'Asteroid']
       .map((player_id) => ({ player_id, points: 3 }));

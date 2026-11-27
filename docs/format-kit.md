@@ -115,6 +115,7 @@ src/lib/format-engine/                       the engine (see Format engine and r
                                             adjust, checks, calendar, cron, hooks, team, team-audit, tracks, tunables, stage-end,
                                             views and api-schemas for the routes
 src/components/format-runtime/player/        the player page's components (namespace format-runtime/player)
+└── PoolsSection.tsx                        searchable pool cards from the server-filtered player view
 src/components/format-runtime/admin/         the Live tab's components (namespace format-runtime/admin)
 src/app/(player)/dashboard/leagues/[id]/play/  the player page
 
@@ -127,6 +128,8 @@ src/app/admin/leagues/[id]/_components/panels/FormatPanel.tsx   the Format tab (
 ```
 
 ### Document model
+
+A domain can opt into the participant pool browser with `overview`. Its optional bilingual `rules` and each entry's bilingual `detail` and `exact_level` go to the player view only under the domain's visibility rules. Set `listed_species_only` to match exact species IDs, including explicitly listed `aliases`, in team constraints. Match prep uses exact levels from visible, unlocked domains in both legacy and native phases.
 
 A definition is a plain JSON object. The schema is **strict**: an unknown key at any level is an issue. There is no open record anywhere; every collection is an array with a key field, and lookups go through a `Map`, so a key such as `constructor` is ordinary data. One exception keeps old documents loading: the validators drop a retired `review` key from a `player.action` rule before the strict check (`prepareDocument`, in both the zod and the browser validator, silently and without a note), because the flag was read nowhere and a stored or hand-authored document may still carry it. The key is gone from the types, the schema, the manifest, the defaults, the presets and the editor; the parsed definition and its hash never contain it, and a stored version is not rewritten.
 

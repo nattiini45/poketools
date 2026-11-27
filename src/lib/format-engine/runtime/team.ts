@@ -24,7 +24,7 @@ import type { ValidationIssueCode, ValidationIssueParams, SetIssue, TeamIssue, T
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import { attributeMap } from '@/lib/format-kit/engine/runtime-names';
 import type { CountSource, DomainEntry, FormatDefinition, TeamConstraint } from '@/lib/format-kit/types';
-import { domainView, findDomainView, visibleEntries } from './domains';
+import { domainView, entrySpecies, findDomainView, visibleEntries } from './domains';
 import { teamContext, playerAttrValue, type EnvBase } from './expr-env';
 import type { KitRuntimeState } from './types';
 
@@ -34,6 +34,8 @@ export type EvolutionClass = 'fe' | 'nfe' | 'lc';
 export interface TeamMember {
   name: string;
   species: string;
+  /** A held item may force a different form of the submitted species. */
+  effectiveSpecies?: string;
   baseName: string;
   baseSpecies: string;
   /** English type names. */
@@ -86,7 +88,10 @@ const toId = (text: string): string => text.toLowerCase().replace(/[^a-z0-9]/g, 
 
 type Matcher = (member: TeamMember) => boolean;
 
-const idMatcher = (ids: ReadonlySet<string>): Matcher => (member) => ids.has(member.species) || ids.has(member.baseSpecies);
+const idMatcher = (ids: ReadonlySet<string>, listedOnly = false): Matcher =>
+  (member) => listedOnly
+    ? ids.has(member.species) && ids.has(member.effectiveSpecies ?? member.species)
+    : ids.has(member.species) || ids.has(member.baseSpecies);
 
 function sourceMatcher(source: CountSource, input: ConstraintInput): Matcher {
   switch (source.kind) {
@@ -94,9 +99,13 @@ function sourceMatcher(source: CountSource, input: ConstraintInput): Matcher {
       const view = findDomainView(input.def, source.domain, input.state.flags, input.state.amendments);
       if (view === null || (source.unlocked_only && !view.unlocked)) return () => false;
       // The team verdict is shown to players: read only what a player may see (an `admins` or a locked `when_unlocked` pool is empty).
-      return idMatcher(new Set(visibleEntries(view, false).map((entry) => entry.id)));
+      return idMatcher(new Set(visibleEntries(view, false).flatMap(entrySpecies)), view.listedSpeciesOnly);
     }
     case 'resource': {
+      const resource = input.def.resources?.find((candidate) => candidate.key === source.resource);
+      const domain = resource?.holds.kind === 'domain'
+        ? findDomainView(input.def, resource.holds.domain, input.state.flags, input.state.amendments)
+        : null;
       const ids = new Set<string>();
       for (const item of input.state.items) {
         if (
@@ -104,10 +113,13 @@ function sourceMatcher(source: CountSource, input: ConstraintInput): Matcher {
           item.player_id === input.playerId &&
           item.item_id !== null &&
           (source.ordinal === undefined || item.ordinal === source.ordinal)
-        )
+        ) {
           ids.add(item.item_id);
+          const entry = domain && visibleEntries(domain, false).find((candidate) => candidate.id === item.item_id);
+          if (entry) for (const id of entry.aliases ?? []) ids.add(id);
+        }
       }
-      return idMatcher(ids);
+      return idMatcher(ids, domain?.listedSpeciesOnly);
     }
     case 'species':
       return idMatcher(new Set(source.ids));

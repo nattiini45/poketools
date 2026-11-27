@@ -12,6 +12,12 @@ export interface DomainView {
   visibility: DomainDef['visibility'];
   unlocked: boolean;
   entries: DomainEntry[];
+  listedSpeciesOnly?: boolean;
+}
+
+/** Canonical dex ids admitted by an entry, including any explicitly listed alternate formes. */
+export function entrySpecies(entry: DomainEntry): readonly string[] {
+  return [entry.id, ...(entry.aliases ?? [])];
 }
 
 /** The flag key of a domain's lock state. */
@@ -56,6 +62,7 @@ export function domainView(
     visibility: domain.visibility,
     unlocked: isDomainUnlocked(domain, flags),
     entries: amendEntries(domain.entries, domain.key, amendments),
+    ...(domain.listed_species_only && { listedSpeciesOnly: true }),
   }));
 }
 
