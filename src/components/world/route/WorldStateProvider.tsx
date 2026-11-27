@@ -647,10 +647,11 @@ export default function WorldStateProvider({
    * The tier decision: URL override > viewer preference > hard floors >
    * advisory checks — resolved by the pure `resolveTierDecision`. The server
    * snapshot sentinel short-circuits to `SERVER_TIER`, so SSR and the first
-   * client paint stay Lite regardless of the preference.
+   * client paint stay Lite regardless of the preference. DOM-only worlds
+   * stay Lite even with a URL override.
    */
   const detected: TierDecision =
-    caps === SERVER_CAPS
+    !resolvedTheme || caps === SERVER_CAPS
       ? SERVER_TIER
       : resolveTierDecision(urlTierOverride, worldExperience, caps);
 

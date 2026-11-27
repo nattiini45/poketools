@@ -13,6 +13,7 @@ import type { LeagueHubPanelData } from '@/lib/league-hub/load';
 import type { PublicSeasonParticipant } from '@/lib/players/public-player';
 import type { SeasonWithDetails } from '@/types/season';
 import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
+import { PLAYER_POOL_SECTION_ID } from '@/lib/format-engine/runtime/view-types';
 import { HubNotice, HubStatusChip } from './HubBits';
 import HubTabPending from './HubTabPending';
 import HubTabStripScroll from './HubTabStripScroll';
@@ -37,6 +38,7 @@ export interface LeagueHubProps {
   tabs: readonly LeagueHubTab[];
   activeTab: LeagueHubTab;
   panel: LeagueHubPanelData;
+  hasPoolOverview?: boolean;
 }
 
 /** The item icon of each hub tab (the approved map's league tabs). */
@@ -253,17 +255,20 @@ export default function LeagueHub({
   tabs,
   activeTab,
   panel,
+  hasPoolOverview = false,
 }: LeagueHubProps) {
   const copy = leagueHubCopy(locale);
   const caps = getFormatCapabilities(league.format_type);
   // The format's own draft page: the arena (`/draft-room`) for Evolution
   // Point Buy, `/draft` for the plain draft format, as the Pulse CTA links.
   const draftHref = leagueDraftHref(league.id, league.format_type);
+  const playHref = `/dashboard/leagues/${league.id}/play`;
   const links = [
     { href: `/insights?scope=league&id=${league.id}&tab=usage`, label: copy.links.insights },
     ...(draftHref ? [{ href: draftHref, label: copy.links.draft }] : []),
     ...(caps.matchupRoles ? [{ href: `/leagues/${league.id}/matchup`, label: copy.links.matchup }] : []),
-    ...(league.format_type === 'custom' ? [{ href: `/dashboard/leagues/${league.id}/play`, label: copy.links.play }] : []),
+    ...(league.format_type === 'custom' ? [{ href: playHref, label: copy.links.play }] : []),
+    ...(hasPoolOverview ? [{ href: `${playHref}#${PLAYER_POOL_SECTION_ID}`, label: copy.links.playerPools }] : []),
   ];
   const facts = [
     copy.formatType[league.format_type] ?? league.format_type,

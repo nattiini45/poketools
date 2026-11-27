@@ -4,13 +4,16 @@ import { useState } from 'react';
 import Input from '@/components/ui/Input';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
-import type { PoolView } from '@/lib/format-engine/runtime/view-types';
+import { PLAYER_POOL_SECTION_ID, type PoolView } from '@/lib/format-engine/runtime/view-types';
 import { entryMatchesSearch } from './entry-names';
-import { EntrySprite, PLAYER_CARD, PlayerSection } from './parts';
+import { EntrySprite, PLAYER_CARD, PLAYER_SECTION_LINK, PlayerSection } from './parts';
 import SpeciesLabel from './SpeciesLabel';
 import { useLText } from './useLabels';
 
-export default function PoolsSection({ pools }: { pools: readonly PoolView[] }) {
+export default function PoolsSection({
+  pools,
+  itemsSectionId,
+}: { pools: readonly PoolView[]; itemsSectionId?: string }) {
   const t = useT(formatRuntimePlayerMessages);
   const labelOf = useLText();
   const [query, setQuery] = useState('');
@@ -20,7 +23,12 @@ export default function PoolsSection({ pools }: { pools: readonly PoolView[] }) 
   if (sections.length === 0) return null;
 
   return (
-    <PlayerSection title={t('pools.heading')}>
+    <PlayerSection id={PLAYER_POOL_SECTION_ID} title={t('pools.heading')}>
+      {itemsSectionId && (
+        <a href={`#${itemsSectionId}`} className={PLAYER_SECTION_LINK}>
+          {t('items.heading')}
+        </a>
+      )}
       <Input
         type="search"
         label={t('pools.search')}

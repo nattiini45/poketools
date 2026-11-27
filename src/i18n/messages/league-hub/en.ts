@@ -45,6 +45,7 @@ export default {
     teams: 'Teams & progress',
     phasePage: 'Open phase page',
     play: 'Your moves',
+    playerPools: 'Pokémon pools',
   },
   table: {
     rank: '#',

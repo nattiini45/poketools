@@ -29,6 +29,8 @@ Four 3D route-themed worlds are registered:
   through an explicit admin pin or a viewer override.
 - **`clouds`** — the sky-island chain; matches NO format, pin/override only.
 
+The public page of a `custom` league uses the selected theme's DOM sections for Pulse, Schedule and Rules. It omits the classic roster and Teams anchors and keeps the fixed-station 3D scene off.
+
 A DOM-only **`default`** world (anchored sections `#pulse #phases #reports
 #stats #rules`, no route theme) remains as the fallback for a league pinned to
 an unregistered theme id. It is deliberately **not exported**;

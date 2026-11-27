@@ -780,6 +780,9 @@ This map covers the main pages and the routes whose contracts the rest of the sp
                                One scroll page with anchored sections #pulse #roster #teams
                                #schedule #rules; contextual interactions open overlays via search
                                params (?team=<pid>, ?mon=<line>) instead of subpages.
+                               Custom leagues use the theme's DOM view with no classic
+                               roster, Teams section or fixed-station scene. Their hub links
+                               participants to the Pokémon pools when a public overview exists.
                                #pulse carries the league hub under the masthead (header links:
                                /insights?scope=league, the format's draft page via
                                leagueDraftHref — /leagues/[id]/draft-room for EPB (as the Pulse
@@ -901,7 +904,8 @@ This map covers the main pages and the routes whose contracts the rest of the sp
 /dashboard/confirm/[mid]       Confirm opponent's submitted result
 /dashboard/team/[tid]          Edit my team for a tournament (pre-lock)
 /dashboard/match-prep/[mid]    Match preparation
-/dashboard/leagues/[id]/play  Live format view of a custom league: action forms, items, relations, challenge ladders
+/dashboard/leagues/[id]/play  Live format view of a custom league: action forms, items, relations, challenge ladders,
+                               and the participant pool overview (only visible pools), linked at #pokemon-pools
 /dashboard/broadcast/*         Cast Studio match tracker (player)
 /dashboard/settings            World experience (3D on/off) and Language (LanguageOptions, §17)
 

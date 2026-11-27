@@ -7,6 +7,7 @@ import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { leagueMetadata } from '@/lib/seo/page-metadata';
 import { readLeague } from '@/lib/seo/page-reads';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
+import { hasPublicFormatPoolOverview } from '@/lib/supabase/queries/season-formats';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
@@ -120,7 +121,15 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
   // persisted preference reaches the server as that param via
   // `WorldOverrideRedirect`. The world is resolved from the season row alone,
   // BEFORE any branch-specific read, so each branch fetches only what it renders.
-  const world = resolveViewerWorld(league, query[WORLD_OVERRIDE_URL_PARAM]);
+  const themedWorld = resolveViewerWorld(league, query[WORLD_OVERRIDE_URL_PARAM]);
+  const customFormat = league.format_type === 'custom';
+  // The route scenes have fixed point-buy and gym stations. Custom leagues use
+  // the same theme's DOM sections without those stations.
+  const world = customFormat ? {
+    ...themedWorld,
+    routeThemeId: undefined,
+    sections: themedWorld.sections.filter(({ id }) => id !== 'roster' && id !== 'teams'),
+  } : themedWorld;
   const RouteWorld = ROUTE_WORLDS[world.id];
 
   // The viewer's language is a cookie read (no query); every visible word
@@ -161,15 +170,18 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     const hubTabs = availableLeagueHubTabs(stages, { reports: ENABLE_KALE_CABBAGE });
     const hubTab = parseLeagueHubTab(query[LEAGUE_HUB_TAB_PARAM], hubTabs);
     const routeDataRead = publicReads.worldRouteData(id, { league, stages, participants, hasDraftPool, hiddenPlayerIds, ...nativePreload });
-    const [routeData, worldExperience, hubPanel] = await Promise.all([
+    const viewerId = sessionPlayer?.playerId;
+    const showPlayerPools = customFormat && visibleParticipants.some(({ id: playerId }) => playerId === viewerId);
+    const [routeData, worldExperience, hubPanel, hasPoolOverview] = await Promise.all([
       routeDataRead,
-      sessionPlayer
+      sessionPlayer && world.routeThemeId
         ? getPlayerWorldExperience(sessionPlayer.playerId).catch((err: unknown): WorldExperience => {
             console.error('[leagues/[id]] world_experience read failed:', err);
             return DEFAULT_WORLD_EXPERIENCE;
           })
         : Promise.resolve<WorldExperience>(DEFAULT_WORLD_EXPERIENCE),
       loadLeagueHubPanel(hubTab, { seasonId: id, league, stages, participants, hiddenPlayerIds, routeData: routeDataRead, ...nativePreload }),
+      showPlayerPools ? hasPublicFormatPoolOverview(id) : false,
     ]);
     if (!routeData || !hubPanel) notFound();
 
@@ -200,6 +212,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
             tabs={hubTabs}
             activeTab={hubTab}
             panel={hubPanel}
+            hasPoolOverview={hasPoolOverview}
           />
         </div>
         {/* `world` is restated on the payload so the contract can never carry

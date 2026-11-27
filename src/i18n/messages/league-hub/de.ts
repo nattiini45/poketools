@@ -33,6 +33,7 @@ export default defineDe<typeof en>()({
     teams: 'Teams & Fortschritt',
     phasePage: 'Zur Phasenseite',
     play: 'Deine Aktionen',
+    playerPools: 'Pokémon-Pools',
   },
   table: {
     rank: '#',

@@ -3,27 +3,30 @@
 import type { ReactNode } from 'react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import ItemIcon from '@/components/ui/ItemIcon';
+import { FOCUS_RING } from '@/components/ui/panel';
 import type { ItemIconId } from '@/lib/pkmn/item-icons';
 import { cn } from '@/lib/utils/cn';
 import { speciesDisplayName } from './entry-names';
 
 /** The card every block of the player page sits on. */
 export const PLAYER_CARD = 'flex flex-col gap-3 rounded-poke-lg border border-hairline bg-surface p-4 sm:p-5';
+export const PLAYER_SECTION_LINK = `inline-flex min-h-11 self-start items-center text-body font-[550] text-accent-ink underline-offset-4 hover:underline sm:min-h-0 ${FOCUS_RING}`;
 /** The focus ring of the page's programmatic focus targets (headings, rows, the problem list). */
 export const FOCUS_TARGET =
   'focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus-visible:ring-2 focus-visible:ring-ring';
 
 interface PlayerSectionProps {
   title: string;
+  id?: string;
   /** The section's icon from the approved item-icon map. */
   icon?: ItemIconId;
   children: ReactNode;
 }
 
 /** One section of the player page: a pixel title with its item icon over the section's cards. */
-export function PlayerSection({ title, icon, children }: PlayerSectionProps) {
+export function PlayerSection({ title, id, icon, children }: PlayerSectionProps) {
   return (
-    <section className="flex flex-col gap-3">
+    <section id={id} className={cn('flex flex-col gap-3', id && 'scroll-mt-24')}>
       <div className="flex items-center gap-2">
         {icon && <ItemIcon item={icon} />}
         <h2 className="font-heading text-title text-fg">{title}</h2>
