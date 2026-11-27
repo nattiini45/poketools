@@ -57,7 +57,8 @@ BEGIN
   END LOOP;
 END $$;
 
--- The caller supplies the same phase generation it writes. A completed stage's membership is historical.
+-- The caller supplies the same phase generation it writes. Only ungrouped Swiss can take active entrants:
+-- it pairs the current roster each round, without rewriting a fixed schedule or assigning groups.
 CREATE FUNCTION public.format__sync_league_roster(p_season_id uuid, p_native boolean, p_player_id uuid DEFAULT NULL)
 RETURNS void
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
@@ -66,6 +67,7 @@ DECLARE
   v_seed text;
   v_phase_table text := CASE WHEN p_native THEN 'league_phases' ELSE 'tournaments' END;
   v_member_table text := CASE WHEN p_native THEN 'phase_participants' ELSE 'tournament_participants' END;
+  v_group_table text := CASE WHEN p_native THEN 'phase_groups' ELSE 'tournament_groups' END;
   v_owner_column text := CASE WHEN p_native THEN 'phase_id' ELSE 'tournament_id' END;
   v_added uuid[];
   v_player uuid;
@@ -85,8 +87,20 @@ BEGIN
         + row_number() OVER (PARTITION BY p.id ORDER BY s.player_id))::integer
     FROM public.%3$I p
     JOIN public.season_participants s ON s.season_id = p.season_id
-    WHERE p.season_id = $1 AND p.format_stage_key IS NOT NULL AND p.status IN ('upcoming', 'active')
+    WHERE p.season_id = $1 AND p.format_stage_key IS NOT NULL AND p.format_group = 0
       AND p.stage_spec #> '{stage,participants}' @> '{"from":"roster","enrollment":"league_roster"}'::jsonb
+      AND (
+        p.status = 'upcoming' OR (
+          p.status = 'active'
+          AND (
+            p.stage_spec #>> '{stage,pairing,kind}' = 'swiss'
+            OR p.stage_spec #> '{stage,pairing}' @> '{"kind":"filter","base":{"kind":"swiss"}}'::jsonb
+          )
+          AND p.stage_spec #> '{stage,groups}' IS NULL
+          AND NOT EXISTS (SELECT 1 FROM public.season_groups g WHERE g.season_id = p.season_id)
+          AND NOT EXISTS (SELECT 1 FROM public.%4$I g WHERE g.%2$I = p.id)
+        )
+      )
       AND ($2 IS NULL OR s.player_id = $2)
       AND NOT EXISTS (SELECT 1 FROM public.%1$I m WHERE m.%2$I = p.id AND m.player_id = s.player_id)
     ORDER BY p.id, s.player_id
@@ -94,7 +108,7 @@ BEGIN
     RETURNING player_id
     )
     SELECT array_agg(DISTINCT player_id ORDER BY player_id) FROM inserted
-  $query$, v_member_table, v_owner_column, v_phase_table) INTO v_added USING p_season_id, p_player_id;
+  $query$, v_member_table, v_owner_column, v_phase_table, v_group_table) INTO v_added USING p_season_id, p_player_id;
 
   IF v_added IS NOT NULL THEN
     FOREACH v_player IN ARRAY v_added LOOP

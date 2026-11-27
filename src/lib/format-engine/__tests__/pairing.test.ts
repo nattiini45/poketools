@@ -82,6 +82,10 @@ describe('pairNextRound', () => {
     };
     const result = pairNextRound(synced);
     expect(result).toEqual(pairNextRound({ ...synced, participantIds: [...synced.participantIds].reverse() }));
+    expect(result).toEqual(pairNextRound({
+      ...synced,
+      stage: { ...synced.stage, participants: { from: 'roster', enrollment: 'manual', seeding: 'random' } },
+    }));
     expect(result.kind).toBe('round');
     if (result.kind !== 'round') throw new Error('Expected a generated Swiss round');
     expect([...result.round.pairings.flatMap((pair) => [pair.player_1_id, pair.player_2_id]), ...result.round.bye_player_ids].sort())

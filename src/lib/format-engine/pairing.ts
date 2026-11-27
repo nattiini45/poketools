@@ -187,7 +187,7 @@ export function pairNextRound(input: KitPairingInput): KitPairingResult {
   const ranked = table.map((row) => row.player_id);
   const { seed } = input;
   if (seed != null && swissOf(pairing) !== null && roundNumber === 1 && stage.participants?.from === 'roster'
-      && stage.participants.enrollment === 'league_roster' && stage.participants.seeding === 'random') {
+      && stage.participants.seeding === 'random') {
     const scope = `stage:${stage.key}:first-round`;
     ranked.sort((a, b) => seededRand(seed, scope, a) - seededRand(seed, scope, b) || a.localeCompare(b));
   }

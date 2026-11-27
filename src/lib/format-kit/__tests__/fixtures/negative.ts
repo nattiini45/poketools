@@ -656,6 +656,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'foreach-group-own-groups', 'foreach_group_invalid', '/stages/4/groups', mutate(W, [
     { op: 'add', path: '/stages/4/groups', value: { count: 2, method: 'serpentine' } },
   ]), { params: { stage: 'per_group', from_stage: 'groups', reason: 'own_groups' } }),
+  fx('error', 'foreach-group-league-enrollment', 'foreach_group_invalid', '/stages/4/participants/enrollment', mutate(W, [
+    { op: 'replace', path: '/stages/4/participants', value: { from: 'roster', seeding: 'random', enrollment: 'league_roster' } },
+  ]), { params: { stage: 'per_group', from_stage: 'groups', reason: 'league_roster' } }),
   fx('error', 'foreach-group-not-earlier', 'foreach_group_invalid', '/stages/4/foreach_group/from', mutate(W, [
     { op: 'replace', path: '/stages/4/foreach_group/from', value: 'houses' },
   ]), { params: { stage: 'per_group', from_stage: 'houses', reason: 'no_groups' } }),

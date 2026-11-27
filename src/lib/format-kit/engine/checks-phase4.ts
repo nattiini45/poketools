@@ -366,6 +366,9 @@ function checkForeachGroup(out: Diagnostic[], lookup: Lookup, stage: Stage, i: n
   const at = (...path: (string | number)[]) => ptr('stages', i, ...path);
   const params = { stage: stage.key, from_stage: foreach.from };
   if (stage.groups !== undefined) out.push(diag('foreach_group_invalid', at('groups'), { ...params, reason: 'own_groups' }));
+  if (stage.participants.from === 'roster' && stage.participants.enrollment === 'league_roster') {
+    out.push(diag('foreach_group_invalid', at('participants', 'enrollment'), { ...params, reason: 'league_roster' }));
+  }
   const index = lookup.stageIndex.get(foreach.from);
   if (index === undefined) {
     out.push(diag('ref_unknown_stage', at('foreach_group', 'from'), { key: foreach.from, where: 'foreach_group' }));
