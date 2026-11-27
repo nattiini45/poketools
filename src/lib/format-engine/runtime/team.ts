@@ -53,6 +53,7 @@ export type ConstraintIssueCode = Extract<
   | 'kit_roster_size'
   | 'kit_count_min'
   | 'kit_count_max'
+  | 'kit_team_rules_unavailable'
   | 'kit_not_allowed'
   | 'kit_distinct'
   | 'kit_type_quota'
@@ -134,10 +135,13 @@ function sourceMatcher(source: CountSource, input: ConstraintInput): Matcher {
   }
 }
 
-function sourceLabel(source: CountSource): string {
+function sourceLabel(source: CountSource, input: ConstraintInput): string | undefined {
   switch (source.kind) {
-    case 'domain':
+    case 'domain': {
+      const view = findDomainView(input.def, source.domain, input.state.flags, input.state.amendments);
+      if (view?.visibility === 'admins' || (view?.visibility === 'when_unlocked' && !view.unlocked)) return undefined;
       return source.unlocked_only ? `domain ${source.domain} (when unlocked)` : `domain ${source.domain}`;
+    }
     case 'resource': {
       // The player's own holdings of a resource, read as a phrase (`junk_gifts` -> "your own junk gifts"); an ordinal
       // names one slot of it ("your own junk gifts #1").
@@ -146,10 +150,14 @@ function sourceLabel(source: CountSource): string {
     }
     case 'species':
       return `species ${source.ids.join(', ')}`;
-    case 'any_of':
-      return `any of (${source.sources.map(sourceLabel).join('; ')})`;
-    case 'not':
-      return `not (${sourceLabel(source.source)})`;
+    case 'any_of': {
+      const labels = source.sources.map((part) => sourceLabel(part, input));
+      return labels.includes(undefined) ? undefined : `any of (${labels.join('; ')})`;
+    }
+    case 'not': {
+      const label = sourceLabel(source.source, input);
+      return label === undefined ? undefined : `not (${label})`;
+    }
   }
 }
 
@@ -239,11 +247,19 @@ function evaluateOne(constraint: TeamConstraint, index: number, input: Constrain
         for (const slot of matches) issue('kit_not_allowed', { species: members[slot]?.name ?? '' }, [slot]);
         return out;
       }
-      const source = sourceLabel(constraint.source);
-      if (constraint.min !== undefined && matches.length < constraint.min) {
+      const { min, max } = constraint;
+      const below = min !== undefined && matches.length < min;
+      const above = max !== undefined && matches.length > max;
+      if (!below && !above) return out;
+      const source = sourceLabel(constraint.source, input);
+      if (source === undefined) {
+        issue('kit_team_rules_unavailable', {});
+        return out;
+      }
+      if (below) {
         issue('kit_count_min', { source, min: constraint.min, have: matches.length });
       }
-      if (constraint.max !== undefined && matches.length > constraint.max) {
+      if (above) {
         issue('kit_count_max', { source, max: constraint.max, have: matches.length }, matches);
       }
       return out;
@@ -331,6 +347,7 @@ const ENGLISH: Record<ConstraintIssueCode, string> = {
   kit_roster_size: 'Team size: this league needs {min} to {max} Pokémon, found {have}',
   kit_count_min: 'Team rule: at least {min} Pokémon from {source} needed, found {have}',
   kit_count_max: 'Team rule: at most {max} Pokémon from {source} allowed, found {have}',
+  kit_team_rules_unavailable: 'This round’s team rules are not available yet',
   kit_not_allowed: '{species} is not in any pool you may use in this league',
   kit_distinct: 'Team rule: at most {max} Pokémon may share the same {by} ({value}), found {have}',
   kit_type_quota: 'Type quota: need at least {min} {type}-type Pokémon, have {have}',
