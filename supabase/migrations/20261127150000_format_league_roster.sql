@@ -116,16 +116,22 @@ BEGIN
     ON CONFLICT (%2$I, player_id) DO NOTHING
     RETURNING %2$I AS phase_id, player_id
     )
-    SELECT array_agg(DISTINCT i.player_id ORDER BY i.player_id),
-      array_agg(DISTINCT i.phase_id) FILTER (
-        WHERE p.status = 'upcoming' AND p.stage_spec #>> '{stage,participants,seeding}' IN ('rating', 'random')
+    SELECT (SELECT array_agg(DISTINCT i.player_id ORDER BY i.player_id) FROM inserted i),
+      array_agg(p.id)
+    FROM public.%3$I p
+    WHERE p.season_id = $1 AND p.status = 'upcoming' AND p.format_stage_key IS NOT NULL AND p.format_group = 0
+      AND p.stage_spec #> '{stage,participants}' @> '{"from":"roster","enrollment":"league_roster"}'::jsonb
+      AND (
+        ($2 IS NULL AND p.stage_spec #>> '{stage,participants,seeding}' IN ('rating', 'random', 'signup'))
+        OR (p.stage_spec #>> '{stage,participants,seeding}' IN ('rating', 'random')
+          AND EXISTS (SELECT 1 FROM inserted i WHERE i.phase_id = p.id))
       )
-    FROM inserted i JOIN public.%3$I p ON p.id = i.phase_id
   $query$, v_member_table, v_owner_column, v_phase_table, v_group_table)
     INTO v_added, v_seed_phases USING p_season_id, p_player_id;
 
   IF v_seed_phases IS NOT NULL THEN
-    -- Rank the whole field when a seat is added. Clearing first allows seed exchanges under the unique index.
+    -- Reattaching can change the seed or mode while retaining all seats. Reapply the mode on full sync.
+    -- Clearing first allows seed exchanges under the unique index.
     EXECUTE format('UPDATE public.%I SET seed = NULL WHERE %I = ANY ($1)', v_member_table, v_owner_column)
       USING v_seed_phases;
     EXECUTE format($query$
@@ -135,6 +141,7 @@ BEGIN
             CASE WHEN s.mode = 'rating' THEN coalesce(r.rating, 1500) END DESC,
             CASE WHEN s.mode = 'rating' THEN pl.name END,
             CASE WHEN s.mode = 'random' THEN md5($2 || ':' || p.format_stage_key || ':' || m.player_id::text) END,
+            CASE WHEN s.mode = 'signup' THEN sp.joined_at END NULLS FIRST,
             m.player_id
         )::integer AS seed
         FROM public.%1$I m
@@ -142,6 +149,8 @@ BEGIN
         CROSS JOIN LATERAL (SELECT p.stage_spec #>> '{stage,participants,seeding}' AS mode) s
         JOIN public.players pl ON pl.id = m.player_id
         LEFT JOIN public.player_ratings r ON r.player_id = m.player_id AND s.mode = 'rating'
+        LEFT JOIN public.season_participants sp
+          ON sp.season_id = p.season_id AND sp.player_id = m.player_id AND s.mode = 'signup'
         WHERE p.id = ANY ($1)
       )
       UPDATE public.%1$I m SET seed = r.seed FROM ranked r
@@ -153,6 +162,8 @@ BEGIN
     FOREACH v_player IN ARRAY v_added LOOP
       PERFORM public.format__splice_roster_player(p_season_id, v_player, v_spec, v_seed);
     END LOOP;
+  END IF;
+  IF v_added IS NOT NULL OR v_seed_phases IS NOT NULL THEN
     UPDATE public.season_formats SET revision = revision WHERE season_id = p_season_id;
   END IF;
 END $$;

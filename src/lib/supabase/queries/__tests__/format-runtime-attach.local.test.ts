@@ -110,10 +110,9 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
     expect(Object.values(await sizes(ids.other)).every((n) => n > 0)).toBe(true);
   });
 
-  it('backfills a rating-seeded roster and reseeds when a higher-rated player joins before round one', async () => {
+  it('keeps the upcoming roster and its seeds in sync through additions, reattachment, and removals', async () => {
     const seasonId = randomUUID();
     const rulesetId = randomUUID();
-    const stage = { key: 'swiss', participants: { from: 'roster', seeding: 'rating', enrollment: 'league_roster' } };
     expect((await insertLocalRuleset(client, { id: rulesetId, name: `Attach rating ${RUN}` })).error).toBeNull();
     try {
       expect((await client.from('player_ratings').insert([
@@ -125,19 +124,22 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
       })).error).toBeNull();
       const add = (playerId: string) => client.rpc('season_participant_add', { p_season_id: seasonId, p_player_id: playerId });
       expect((await add(ids.p1)).error).toBeNull();
-      const result = await client.rpc('format_attach_season', {
-        p_season_id: seasonId,
-        p_definition_id: null as unknown as string,
-        p_version_no: 1,
-        p_spec: { stages: [stage] },
-        p_spec_hash: HASH,
-        p_seed: 'seedseed1',
-        p_stages: [{
-          key: stage.key, name: 'Swiss', bracket_type: 'swiss', ruleset_id: rulesetId, best_of_default: 1,
-          is_doubles: false, bracket_reset_enabled: false, stage_order: 0, stage_spec: { v: 1, stage },
-        }],
-      });
-      expect(result.error).toBeNull();
+      const attachWithSeeding = (seeding: 'signup' | 'rating') => {
+        const stage = { key: 'swiss', participants: { from: 'roster', seeding, enrollment: 'league_roster' } };
+        return client.rpc('format_attach_season', {
+          p_season_id: seasonId,
+          p_definition_id: null as unknown as string,
+          p_version_no: 1,
+          p_spec: { stages: [stage] },
+          p_spec_hash: HASH,
+          p_seed: 'seedseed1',
+          p_stages: [{
+            key: stage.key, name: 'Swiss', bracket_type: 'swiss', ruleset_id: rulesetId, best_of_default: 1,
+            is_doubles: false, bracket_reset_enabled: false, stage_order: 0, stage_spec: { v: 1, stage },
+          }],
+        });
+      };
+      expect((await attachWithSeeding('rating')).error).toBeNull();
       const phase = await client.from('tournaments').select('id').eq('season_id', seasonId).single();
       expect(phase.error).toBeNull();
       const phaseId = phase.data?.id;
@@ -145,6 +147,14 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
       const roster = () => client.from('tournament_participants').select('player_id, seed').eq('tournament_id', phaseId).order('seed');
       expect(await roster()).toMatchObject({ error: null, data: [{ player_id: ids.p1, seed: 1 }] });
       expect((await add(ids.p2)).error).toBeNull();
+      expect(await roster()).toMatchObject({
+        error: null, data: [{ player_id: ids.p2, seed: 1 }, { player_id: ids.p1, seed: 2 }],
+      });
+      expect((await attachWithSeeding('signup')).error).toBeNull();
+      expect(await roster()).toMatchObject({
+        error: null, data: [{ player_id: ids.p1, seed: 1 }, { player_id: ids.p2, seed: 2 }],
+      });
+      expect((await attachWithSeeding('rating')).error).toBeNull();
       expect(await roster()).toMatchObject({
         error: null, data: [{ player_id: ids.p2, seed: 1 }, { player_id: ids.p1, seed: 2 }],
       });
