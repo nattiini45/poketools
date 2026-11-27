@@ -34,6 +34,7 @@ vi.mock('@/lib/utils/uuid', () => ({
 
 import {
   listAllMatches,
+  getMatchPairsByRound,
   getMatchesByRound,
   getMatchesByTournament,
   getH2HBetweenPlayers,
@@ -177,6 +178,24 @@ describe('getMatchesByRound', () => {
   it('throws on error', async () => {
     mockBuilder.eq.mockReturnValue({ data: null, error: new Error('round err') });
     await expect(getMatchesByRound('r1')).rejects.toThrow('round err');
+  });
+});
+
+describe('getMatchPairsByRound', () => {
+  it('reads pairings beyond the first PostgREST page', async () => {
+    const firstPair = { player_1_id: 'p1', player_2_id: 'p2' };
+    const lastPair = { player_1_id: 'p2001', player_2_id: 'p2002' };
+    mockBuilder.range
+      .mockReturnValueOnce({ data: Array.from({ length: 1000 }, () => firstPair), error: null })
+      .mockReturnValueOnce({ data: [lastPair], error: null });
+
+    const result = await getMatchPairsByRound('r1');
+    expect(result).toHaveLength(1001);
+    expect(result.at(-1)).toEqual(lastPair);
+    expect(mockBuilder.select).toHaveBeenCalledWith('player_1_id, player_2_id');
+    expect(mockBuilder.eq).toHaveBeenCalledWith('round_id', 'r1');
+    expect(mockBuilder.order).toHaveBeenCalledWith('id');
+    expect(mockBuilder.range).toHaveBeenNthCalledWith(2, 1000, 1999);
   });
 });
 

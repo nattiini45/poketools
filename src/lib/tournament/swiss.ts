@@ -1,6 +1,7 @@
 import type { Pairing, GeneratedRound, MatchRecord, ByeRecord } from './types';
 import { BYE_PLAYER_ID } from './types';
 import { computeStandings, buildPairingHistory, havePlayed } from './standings';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 
 /**
  * How many search steps each pairing search of a round may spend: the bye-candidate pass and the fewest-rematches fallback
@@ -18,6 +19,10 @@ interface Matching {
 }
 
 type AllowPair = (a: string, b: string) => boolean;
+interface StrictPairing {
+  previousRound: PairingHistory;
+  points: ReadonlyMap<string, number>;
+}
 
 /**
  * What a matching costs: a forbidden pair outweighs any number of rematches (a round holds fewer than `size` of them), so
@@ -42,36 +47,44 @@ function searchPairing(
   budget: { steps: number },
   allow?: AllowPair,
   maxForbidden = 0,
+  strict?: StrictPairing,
 ): Matching | null {
   const paired = new Set<string>();
   const pairs: Array<[string, string]> = [];
   let best: Matching | null = null;
+  let bestDistance = Infinity;
   const weight = players.length + 1;
 
-  const visit = (cost: number, rematches: number, forbidden: number): boolean => {
+  const visit = (cost: number, rematches: number, forbidden: number, distance: number): boolean => {
     if (--budget.steps < 0) return true;
     const first = players.find((player) => !paired.has(player));
     if (first === undefined) {
-      if (best === null || cost < costOf(best, players.length)) best = { pairs: [...pairs], rematches, forbidden };
-      // A pairing without rematches or forbidden pairs cannot be beaten: stop.
-      return cost === 0;
+      best = { pairs: [...pairs], rematches, forbidden };
+      bestDistance = distance;
+      return cost === 0 && distance === 0;
     }
     paired.add(first);
     for (const opponent of players) {
       if (paired.has(opponent)) continue;
+      if (strict && havePlayed(strict.previousRound, first, opponent)) continue;
       const rematch = havePlayed(history, first, opponent) ? 1 : 0;
       const forbids = allow !== undefined && !allow(first, opponent) ? 1 : 0;
       const total = cost + rematch + forbids * weight;
+      const totalDistance = strict
+        ? distance + Math.abs((strict.points.get(first) ?? 0) - (strict.points.get(opponent) ?? 0))
+        : 0;
+      const bestCost = best === null ? Infinity : costOf(best, players.length);
       if (
         rematches + rematch > maxRematches ||
         forbidden + forbids > maxForbidden ||
-        (best !== null && total >= costOf(best, players.length))
+        total > bestCost ||
+        (total === bestCost && totalDistance >= bestDistance)
       ) {
         continue;
       }
       paired.add(opponent);
       pairs.push([first, opponent]);
-      const stop = visit(total, rematches + rematch, forbidden + forbids);
+      const stop = visit(total, rematches + rematch, forbidden + forbids, totalDistance);
       pairs.pop();
       paired.delete(opponent);
       if (stop) {
@@ -83,7 +96,7 @@ function searchPairing(
     return false;
   };
 
-  visit(0, 0, 0);
+  visit(0, 0, 0, 0);
   return best;
 }
 
@@ -152,6 +165,11 @@ export function generateSwissRound(
      * the round is the one with the fewest rejected pairs (then the fewest rematches) and `forbidden` reports how many.
      */
     allowPair?: (a: string, b: string) => boolean;
+    /**
+     * Outright excludes opponents from the immediately preceding round, even during fallback. After applying the
+     * existing filter and repeat priorities, minimise the total Swiss points gap across each candidate's pairing.
+     */
+    strict?: StrictPairing;
   } = {},
 ): GeneratedRound {
   const stepLimit = options.stepLimit ?? SWISS_SEARCH_STEP_LIMIT;
@@ -177,7 +195,7 @@ export function generateSwissRound(
   // First: the best bye candidate that leaves a pairing without any rematch.
   for (const bye of byeCandidates) {
     tried += 1;
-    const matching = searchPairing(without(bye), history, 0, budget, options.allowPair);
+    const matching = searchPairing(without(bye), history, 0, budget, options.allowPair, 0, options.strict);
     if (matching !== null) {
       chosen = { bye, matching };
       break;
@@ -186,12 +204,30 @@ export function generateSwissRound(
       // Not proven: a candidate not yet tried (or this one, further on) might still have allowed a clean round.
       console.warn(
         `[swiss] round ${roundNumber} of ${ranked.length} players: the rematch-free search hit its step limit after ` +
-          `${tried} of ${byeCandidates.length} bye candidate(s); falling back to the first candidate and its best pairing`,
+          `${tried} of ${byeCandidates.length} bye candidate(s); falling back to the best available pairing`,
       );
       break;
     }
   }
   // Else: the first candidate's pairing with the fewest rematches, or greedy when the search ran out of steps.
+  if (chosen === null && options.strict) {
+    for (const bye of byeCandidates) {
+      const players = without(bye);
+      const matching = searchPairing(
+        players, history, players.length, { steps: stepLimit }, options.allowPair, players.length, options.strict,
+      );
+      if (matching !== null) {
+        chosen = { bye, matching };
+        break;
+      }
+    }
+    if (chosen === null) {
+      throw new UserFacingError('Could not generate a complete Swiss round without repeating a pairing from the previous round.', {
+        code: 'swiss_consecutive_repeat_blocked',
+        status: 409,
+      });
+    }
+  }
   if (chosen === null) {
     const bye = byeCandidates[0];
     const fallbackBudget = { steps: stepLimit };
