@@ -146,7 +146,7 @@ A **stage** has a `key`, a `name`, a `participants` selector (`roster` with seed
 
 | Part | Fields and limits |
 |---|---|
-| `pairing` | `round_robin` (`legs` 1 to 4, `mirror_legs` true), `swiss` (`rounds` 1 to 32 or `auto`, `avoid_repeats` true), `single_elim` (`third_place` false), `double_elim` (`bracket_reset` false), `manual` |
+| `pairing` | `round_robin` (`legs` 1 to 4, `mirror_legs` true), `swiss` (`rounds` 1 to 32 or `auto`, `avoid_repeats` true, optional `no_consecutive_repeats`), `single_elim` (`third_place` false), `double_elim` (`bracket_reset` false), `manual` |
 | `series` | `best_of` 1 to 15 (an even number is representable and rejected by the compiler), `allow_draw` false, `overrides` 0 to 32 of `{ round 1..64, from 'start' or 'end' (start), best_of 1..15 }` |
 | `scoring` | `win`, `loss` (0), `bye` (0), optional `draw` and `forfeit`; finite numbers with an absolute value of at most 1000 |
 | `rank` step | `metric` (`metric` key and `direction` `desc` or `asc`), `head_to_head` (`pairwise` or `mini_table`), `coin_flip`, `decision_match`, `manual` |
@@ -307,6 +307,8 @@ Severity, pointer and params of the codes of Phases 1 and 2 (the 42 codes of Pha
 The sixteen expression codes are `expr_shape`, `expr_depth`, `expr_nodes`, `expr_steps`, `expr_type_mismatch`, `expr_unknown_ref`, `expr_ref_type`, `expr_unknown_relation`, `expr_unknown_collection`, `expr_unknown_field`, `expr_arity`, `expr_number_range`, `expr_string_length`, `expr_result_type`, `expr_item_scope` and `expr_nested_aggregate`.
 
 `swiss_rounds_too_many` applies only when `avoid_repeats` is on, and compares the rounds with what a round robin of that field plays (`n - 1` for an even field, `n` for an odd one).
+
+The Swiss option `no_consecutive_repeats` also works in a filtered Swiss stage. It excludes any pairing from the immediately preceding round, including scheduled matches. It uses the stage's cumulative points to minimise the total points gap among pairings of equal filter and repeat cost within the search budget. If the generator cannot find a complete round under this restriction, it returns a conflict before writing the round. The legacy and native manual-round routes apply the same previous-round check before writing Swiss fixtures.
 
 `metric_unproduced` uses the production table of the standings engine: `points`, `wins`, `losses`, `games_played` and `seed` always; `kill_differential` needs `features.killStats`; `rating` needs `features.rating`; `buchholz` needs a round-robin or Swiss stage with two players per match; any other key is `unknown_metric`. The reasons are `unknown_metric`, `needs_kill_stats`, `needs_rating` and `needs_opponents`.
 

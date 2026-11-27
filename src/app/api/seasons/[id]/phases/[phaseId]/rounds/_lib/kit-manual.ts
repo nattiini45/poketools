@@ -44,6 +44,7 @@ export async function prepareManualKitRound(
   }, async () => context);
   return {
     revision: loaded.revision,
+    pairing: scoped.stage.pairing,
     async afterWrite(round: PhaseRound): Promise<PhaseRound> {
       if (forced) {
         logAuditEvent({
