@@ -70,7 +70,7 @@ export default async function SakuraWorld({
       )}
       <ScheduleSection data={view} locale={locale} />
       <RulesSection data={view} locale={locale} />
-      {world.routeThemeId && <ThemeOverlays
+      {world.routeThemeId && !world.liteOnly && <ThemeOverlays
         data={view}
         locale={locale}
         dataLocale={dataLocale}

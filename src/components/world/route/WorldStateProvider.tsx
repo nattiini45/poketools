@@ -526,6 +526,8 @@ interface WorldStateProviderProps {
    */
   theme?: AnyRouteTheme;
   routeThemeId?: string;
+  /** A themed DOM world can use the palette and switcher without offering the scene. */
+  liteOnly?: boolean;
   /**
    * The signed-in viewer's persisted 3D world preference
    * (`players.world_experience`), threaded from the page's server read.
@@ -541,6 +543,7 @@ export default function WorldStateProvider({
   stationIds,
   theme,
   routeThemeId,
+  liteOnly = false,
   worldExperience = DEFAULT_WORLD_EXPERIENCE,
   children,
 }: WorldStateProviderProps) {
@@ -647,11 +650,11 @@ export default function WorldStateProvider({
    * The tier decision: URL override > viewer preference > hard floors >
    * advisory checks — resolved by the pure `resolveTierDecision`. The server
    * snapshot sentinel short-circuits to `SERVER_TIER`, so SSR and the first
-   * client paint stay Lite regardless of the preference. DOM-only worlds
-   * stay Lite even with a URL override.
+   * client paint stay Lite regardless of the preference. DOM-only and
+   * Lite-only worlds stay Lite even with a URL override.
    */
   const detected: TierDecision =
-    !resolvedTheme || caps === SERVER_CAPS
+    liteOnly || !resolvedTheme || caps === SERVER_CAPS
       ? SERVER_TIER
       : resolveTierDecision(urlTierOverride, worldExperience, caps);
 

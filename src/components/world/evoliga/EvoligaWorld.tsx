@@ -105,7 +105,7 @@ export default async function EvoligaWorld({
         locale={locale}
         dataLocale={dataLocale}
       />
-      {world.routeThemeId && <EvoligaOverlays
+      {world.routeThemeId && !world.liteOnly && <EvoligaOverlays
         league={league}
         stages={stages}
         participants={participants}

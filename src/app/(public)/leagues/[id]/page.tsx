@@ -127,7 +127,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
   // the same theme's DOM sections without those stations.
   const world = customFormat ? {
     ...themedWorld,
-    routeThemeId: undefined,
+    liteOnly: true,
     sections: themedWorld.sections.filter(({ id }) => id !== 'roster' && id !== 'teams'),
   } : themedWorld;
   const RouteWorld = ROUTE_WORLDS[world.id];
@@ -174,7 +174,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     const showPlayerPools = customFormat && visibleParticipants.some(({ id: playerId }) => playerId === viewerId);
     const [routeData, worldExperience, hubPanel, hasPoolOverview] = await Promise.all([
       routeDataRead,
-      sessionPlayer && world.routeThemeId
+      sessionPlayer && world.routeThemeId && !world.liteOnly
         ? getPlayerWorldExperience(sessionPlayer.playerId).catch((err: unknown): WorldExperience => {
             console.error('[leagues/[id]] world_experience read failed:', err);
             return DEFAULT_WORLD_EXPERIENCE;

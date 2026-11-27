@@ -52,6 +52,8 @@ export interface SeasonWorld {
    * theme through `src/components/world/themes/index.ts`.
    */
   routeThemeId?: string;
+  /** Keep the selected theme and its palette, but disable its fixed-station route scene. */
+  liteOnly?: boolean;
 }
 
 /**
