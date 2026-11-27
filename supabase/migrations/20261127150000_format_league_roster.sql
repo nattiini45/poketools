@@ -175,6 +175,83 @@ BEGIN
   END IF;
 END $$;
 
+CREATE OR REPLACE FUNCTION public.season_participant_remove(p_season_id uuid, p_player_id uuid) RETURNS boolean
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_group uuid;
+  v_left integer;
+  v_removed integer;
+  v_mode text;
+  v_phase_table text;
+  v_member_table text;
+  v_owner_column text;
+BEGIN
+  IF p_season_id IS NULL OR p_player_id IS NULL THEN
+    RAISE EXCEPTION 'INVALID_CONFIG' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('field', 'player_id')::text;
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtext(p_season_id::text));
+  IF public.season__legacy_draft_live(p_season_id) THEN
+    RAISE EXCEPTION 'SEASON_DRAFT_LOCKED' USING ERRCODE = 'P0001';
+  END IF;
+  SELECT m.group_id INTO v_group FROM public.season_group_members m
+   WHERE m.season_id = p_season_id AND m.player_id = p_player_id;
+  IF FOUND THEN
+    IF public.season_group__league_scheduled(p_season_id) THEN
+      RAISE EXCEPTION 'SEASON_GROUPS_SCHEDULED' USING ERRCODE = 'P0001',
+        DETAIL = jsonb_build_object('season_group_id', v_group)::text;
+    END IF;
+    IF public.season_group__has_live_pool(v_group)
+       OR EXISTS (SELECT 1 FROM public.evolution_tracker t
+                   WHERE t.season_id = p_season_id AND t.player_id = p_player_id AND t.season_group_id = v_group
+                     AND t.line_id IS NOT NULL) THEN
+      RAISE EXCEPTION 'SEASON_GROUP_LOCKED' USING ERRCODE = 'P0001',
+        DETAIL = jsonb_build_object('season_group_id', v_group)::text;
+    END IF;
+    SELECT count(*) INTO v_left FROM public.season_group_members
+     WHERE group_id = v_group AND player_id <> p_player_id;
+    IF v_left < 2 THEN
+      RAISE EXCEPTION 'SEASON_GROUP_TOO_SMALL' USING ERRCODE = 'P0001',
+        DETAIL = jsonb_build_object('season_group_id', v_group)::text;
+    END IF;
+  END IF;
+
+  PERFORM 1 FROM public.seasons WHERE id = p_season_id FOR NO KEY UPDATE;
+  DELETE FROM public.season_participants WHERE season_id = p_season_id AND player_id = p_player_id;
+  IF NOT FOUND THEN RETURN false; END IF;
+
+  -- The format row serializes removal with a relation draw. A successful removal bumps the
+  -- revision so a concurrent draw prepared using the old roster must reload and retry.
+  PERFORM 1 FROM public.season_formats f WHERE f.season_id = p_season_id AND f.engine = 'kit'
+    AND f.spec @> '{"stages":[{"participants":{"from":"roster","enrollment":"league_roster"}}]}'::jsonb
+    FOR UPDATE;
+  IF FOUND THEN
+    v_mode := public.phase_storage_mode();
+    IF v_mode IS DISTINCT FROM 'legacy' AND v_mode IS DISTINCT FROM 'phase' THEN
+      RAISE EXCEPTION 'phase_storage_not_ready' USING ERRCODE = 'P0001';
+    END IF;
+    v_phase_table := CASE WHEN v_mode = 'phase' THEN 'league_phases' ELSE 'tournaments' END;
+    v_member_table := CASE WHEN v_mode = 'phase' THEN 'phase_participants' ELSE 'tournament_participants' END;
+    v_owner_column := CASE WHEN v_mode = 'phase' THEN 'phase_id' ELSE 'tournament_id' END;
+    EXECUTE format($query$
+      DELETE FROM public.%1$I m USING public.%3$I p
+      WHERE m.%2$I = p.id AND m.player_id = $2 AND p.season_id = $1
+        AND p.status = 'upcoming' AND p.format_stage_key IS NOT NULL AND p.format_group = 0
+        AND p.stage_spec #> '{stage,participants}' @> '{"from":"roster","enrollment":"league_roster"}'::jsonb
+    $query$, v_member_table, v_owner_column, v_phase_table) USING p_season_id, p_player_id;
+    GET DIAGNOSTICS v_removed = ROW_COUNT;
+    IF v_removed > 0 THEN
+      IF EXISTS (
+        SELECT 1 FROM public.format_relation_links l WHERE l.season_id = p_season_id
+          AND p_player_id IN (l.from_player_id, l.to_player_id)
+      ) THEN
+        RAISE EXCEPTION 'SEASON_ROSTER_RELATION_ASSIGNED' USING ERRCODE = 'P0001';
+      END IF;
+      UPDATE public.season_formats SET revision = revision WHERE season_id = p_season_id;
+    END IF;
+  END IF;
+  RETURN true;
+END $$;
+
 REVOKE ALL ON FUNCTION public.format__splice_roster_player(uuid, uuid, jsonb, text),
   public.format__sync_league_roster(uuid, boolean, uuid), public.season_participant_add(uuid, uuid)
   FROM PUBLIC, anon, authenticated;

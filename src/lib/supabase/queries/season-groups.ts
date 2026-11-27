@@ -15,6 +15,7 @@ import { supabase } from '../client';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { DraftRuleError } from '@/lib/draft/errors';
 import { callDraftRpc, toDraftRuleError } from '@/lib/draft/rpc-errors';
+import { mapFormatDbError } from '@/lib/format-studio/errors';
 import type { SeasonGroup, SeasonGroupInput, SeasonGroupWithMembers } from '@/types/season-group';
 
 interface GroupRowWithMembers {
@@ -259,13 +260,16 @@ export async function placeSeasonGroupMember(seasonId: string, playerId: string,
  * (SEASON_GROUP_LOCKED), and when the group would keep fewer than two trainers (SEASON_GROUP_TOO_SMALL), all
  * `DraftRuleError`. Before every group rule, for any league, the removal is refused while a legacy pool is in progress
  * (SEASON_DRAFT_LOCKED, 20261102140000): a legacy draft derives its seats from the roster. A trainer in no group, or in
- * a league without groups, is removed as before. Returns whether a roster row was removed (false: the trainer was not
- * on the roster).
+ * a league without groups, is removed as before. An upcoming kit phase on automatic enrollment drops the trainer's
+ * seat in the same transaction. An existing relation assignment blocks that removal (SEASON_ROSTER_RELATION_ASSIGNED).
+ * Returns whether a roster row was removed (false: the trainer was not on the roster).
  */
 export async function removeLeagueParticipant(seasonId: string, playerId: string): Promise<boolean> {
   const removed = await callDraftRpc<unknown>('season_participant_remove', {
     p_season_id: seasonId,
     p_player_id: playerId,
+  }).catch((error: unknown) => {
+    throw mapFormatDbError(error);
   });
   if (typeof removed !== 'boolean') {
     throw new Error('season_participant_remove returned an unexpected payload');

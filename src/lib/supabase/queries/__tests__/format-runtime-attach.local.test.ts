@@ -148,6 +148,21 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
       expect(await roster()).toMatchObject({
         error: null, data: [{ player_id: ids.p2, seed: 1 }, { player_id: ids.p1, seed: 2 }],
       });
+
+      const remove = () => client.rpc('season_participant_remove', { p_season_id: seasonId, p_player_id: ids.p1 });
+      expect((await client.from('format_relation_links').insert([
+        { season_id: seasonId, relation_key: 'santa', from_player_id: ids.p1, to_player_id: ids.p2 },
+        { season_id: seasonId, relation_key: 'santa', from_player_id: ids.p2, to_player_id: ids.p1 },
+      ])).error).toBeNull();
+      expect((await remove()).error).toMatchObject({ code: 'P0001', message: 'SEASON_ROSTER_RELATION_ASSIGNED' });
+      expect((await roster()).data).toHaveLength(2);
+      expect((await client.from('season_participants').select('player_id').eq('season_id', seasonId)).data).toHaveLength(2);
+
+      expect((await client.from('format_relation_links').delete().eq('season_id', seasonId)).error).toBeNull();
+      const beforeRemoval = await revisionOf(seasonId);
+      expect(await remove()).toMatchObject({ error: null, data: true });
+      expect(await roster()).toMatchObject({ error: null, data: [{ player_id: ids.p2, seed: 1 }] });
+      expect(await revisionOf(seasonId)).toBeGreaterThan(beforeRemoval);
     } finally {
       await client.from('seasons').delete().eq('id', seasonId);
       await client.from('player_ratings').delete().in('player_id', [ids.p1, ids.p2]);
