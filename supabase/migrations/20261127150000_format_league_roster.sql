@@ -1,6 +1,10 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
+-- Keep existing rows undated. Their original signup order was not recorded.
+ALTER TABLE public.season_participants ADD COLUMN joined_at timestamptz;
+ALTER TABLE public.season_participants ALTER COLUMN joined_at SET DEFAULT clock_timestamp();
+
 -- The incoming player's roster row, phase seats and any new relation links commit together. Format writers
 -- use season_formats.revision to fence plans validated against the old roster or old recipient.
 CREATE FUNCTION public.format__splice_roster_player(
@@ -84,7 +88,11 @@ BEGIN
     INSERT INTO public.%1$I (%2$I, player_id, seed)
     SELECT p.id, s.player_id,
       (coalesce((SELECT max(m.seed) FROM public.%1$I m WHERE m.%2$I = p.id), 0)
-        + row_number() OVER (PARTITION BY p.id ORDER BY s.player_id))::integer
+        + row_number() OVER (
+          PARTITION BY p.id
+          ORDER BY CASE WHEN p.stage_spec #>> '{stage,participants,seeding}' = 'signup' THEN s.joined_at END
+            NULLS FIRST, s.player_id
+        ))::integer
     FROM public.%3$I p
     JOIN public.season_participants s ON s.season_id = p.season_id
     WHERE p.season_id = $1 AND p.format_stage_key IS NOT NULL AND p.format_group = 0

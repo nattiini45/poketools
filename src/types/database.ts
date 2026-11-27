@@ -7648,6 +7648,7 @@ export type Database = {
           core_assigned_at: string | null
           core_types: string[] | null
           gym_type: string | null
+          joined_at: string | null
           player_id: string
           season_id: string
         }
@@ -7655,6 +7656,7 @@ export type Database = {
           core_assigned_at?: string | null
           core_types?: string[] | null
           gym_type?: string | null
+          joined_at?: string | null
           player_id: string
           season_id: string
         }
@@ -7662,6 +7664,7 @@ export type Database = {
           core_assigned_at?: string | null
           core_types?: string[] | null
           gym_type?: string | null
+          joined_at?: string | null
           player_id?: string
           season_id?: string
         }
