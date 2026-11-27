@@ -94,15 +94,34 @@ export function finalLeaguePlacings<T extends { player_id: string }>(
 ): (T & { rank: number })[] | undefined {
   const playoffs = stages.filter(isPlayoffStage);
   if (playoffs.length === 0) return undefined;
-  const ranks = new Map<string, number>();
-  let offset = 0;
+  // Each block contains rank groups in finishing order. A group may contain several tied players.
+  let blocks: string[][][] = [];
   for (const stage of playoffs) {
     const bracketRanks = playoffRanks(stage, recordsByStage.get(stage.id) ?? []);
     if (bracketRanks.size === 0) return undefined;
-    // Only independent brackets add another block of places.
-    if ([...bracketRanks.keys()].some((id) => ranks.has(id))) break;
-    for (const [id, rank] of bracketRanks) ranks.set(id, offset + rank);
-    offset += bracketRanks.size;
+    const groups = new Map<number, string[]>();
+    for (const [id, rank] of [...bracketRanks].sort((a, b) => a[1] - b[1])) {
+      const group = groups.get(rank) ?? [];
+      group.push(id);
+      groups.set(rank, group);
+    }
+    const dependent = blocks.filter((block) => block.some((group) => group.some((id) => bracketRanks.has(id))));
+    if (dependent.length === 0) {
+      blocks.push([...groups.values()]);
+      continue;
+    }
+    const first = blocks.indexOf(dependent[0]);
+    const eliminated = dependent.flat()
+      .map((group) => group.filter((id) => !bracketRanks.has(id)))
+      .filter((group) => group.length > 0);
+    blocks = blocks.filter((block, index) => index === first || !dependent.includes(block));
+    blocks[first] = [...groups.values(), ...eliminated];
+  }
+  const ranks = new Map<string, number>();
+  let rank = 1;
+  for (const group of blocks.flat()) {
+    for (const id of group) ranks.set(id, rank);
+    rank += group.length;
   }
   const placed = groupTable.filter((row) => ranks.has(row.player_id));
   placed.sort((a, b) => ranks.get(a.player_id)! - ranks.get(b.player_id)!);

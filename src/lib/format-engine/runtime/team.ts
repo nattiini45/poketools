@@ -169,9 +169,11 @@ function indexesWhere(members: readonly TeamMember[], test: (member: TeamMember)
   return out;
 }
 
-/** The entry of any domain that stands for a member (its own species id first, then its base species id). */
+/** Match the submitted species first, then an explicit alias, then the base species. */
 function entryOf(entries: readonly DomainEntry[], member: TeamMember): DomainEntry | undefined {
-  return entries.find((entry) => entry.id === member.species) ?? entries.find((entry) => entry.id === member.baseSpecies);
+  return entries.find((entry) => entry.id === member.species)
+    ?? entries.find((entry) => entry.aliases?.includes(member.species))
+    ?? entries.find((entry) => entry.id === member.baseSpecies);
 }
 
 function distinctGroups(

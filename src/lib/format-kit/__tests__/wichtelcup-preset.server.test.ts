@@ -65,6 +65,19 @@ describe('the Wichtelcup example compiles against the real dex', () => {
     typo.domains = typo.domains?.map((d) => (d.key === 'normal' ? { ...d, entries: [...d.entries, { id: 'pikachux', attrs: [] }] } : d));
     expect(compile(typo, { ...CURRENT_ENV, speciesIds: known }).diagnostics.map((d) => d.code)).toContain('domain_entry_unknown_species');
   });
+
+  it('checks alias species and emits their own diagnostic pointers', () => {
+    const definition = structuredClone(wichtelcup);
+    const entry = definition.domains?.[0]?.entries[0];
+    if (!entry) throw new Error('Expected an example domain entry');
+    entry.aliases = ['rotomwash', 'rotomwah', entry.id];
+    const result = compile(definition, { ...CURRENT_ENV, speciesIds: new Set([...known, 'rotomwash']) });
+    expect(result.diagnostics.filter(({ code }) => code === 'domain_entry_unknown_species' || code === 'domain_entry_duplicate'))
+      .toMatchObject([
+        { code: 'domain_entry_unknown_species', json_pointer: '/domains/0/entries/0/aliases/1' },
+        { code: 'domain_entry_duplicate', json_pointer: '/domains/0/entries/0/aliases/2' },
+      ]);
+  });
 });
 
 describe('the four made-up pools', () => {

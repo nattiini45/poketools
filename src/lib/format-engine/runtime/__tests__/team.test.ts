@@ -445,6 +445,15 @@ describe('type quota, Tera, evolution stage, distinct', () => {
       ['kit_distinct', 'species', 2],
     ]);
   });
+
+  it('uses the entry attribute for an explicitly listed alternate form', () => {
+    const state = stateFor(DEF, { amendments: [{
+      domain: 'normal', add: [{ id: 'rotomheat', aliases: ['rotomwash'], attrs: [{ key: 'role', value: 'attacker' }] }],
+    }] });
+    const members = [member('garchomp'), member('rotomwash', { baseSpecies: 'rotom' })];
+    const constraints: TeamConstraint[] = [{ kind: 'distinct', by: 'attr', attr: 'role', max_per: 1 }];
+    expect(codes(evaluateConstraints(input({ state, constraints, members })))).toEqual(['kit_distinct#0']);
+  });
 });
 
 describe('the team verdict', () => {

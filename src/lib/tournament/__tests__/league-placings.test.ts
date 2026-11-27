@@ -76,6 +76,22 @@ describe('bracket places, not points across phases', () => {
     ]);
   });
 
+  it('uses a later final for shared entrants and keeps an independent bracket below their block', () => {
+    const lower = { ...stage, id: 'lower', participant_count: 2 };
+    const championship = { ...stage, id: 'championship', participant_count: 2 };
+    const table = ['Comet', 'Meteor', 'Nova', 'Orbit', 'Pulsar', 'Quasar', 'Rocket', 'Solar', 'Urania', 'Vega']
+      .map((player_id) => ({ player_id }));
+    const records = new Map([
+      [stage.id, [...quarterfinals, ...semifinals, final]],
+      [lower.id, [record(1, 'Urania', 'Vega', 'Vega')]],
+      [championship.id, [record(1, 'Nova', 'Pulsar', 'Nova')]],
+    ]);
+    expect(finalLeaguePlacings(table, [stage, lower, championship], records)?.map(({ player_id, rank }) => [player_id, rank])).toEqual([
+      ['Nova', 1], ['Pulsar', 2], ['Meteor', 3], ['Solar', 3],
+      ['Comet', 5], ['Orbit', 5], ['Quasar', 5], ['Rocket', 5], ['Vega', 9], ['Urania', 10],
+    ]);
+  });
+
   it('keeps non-qualifiers in the original group-table order, without mutating the table', () => {
     const table = ['Rocket', 'Comet', 'Pulsar', 'Nova', 'Meteor', 'Orbit', 'Quasar', 'Solar', 'Zenith', 'Asteroid']
       .map((player_id) => ({ player_id, points: 3 }));
