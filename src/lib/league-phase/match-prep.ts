@@ -5,7 +5,7 @@ import { assertEpbTeamCompliant, assertNoSuspendedLinesInTeam } from '@/lib/draf
 import { KitStageSpecError, stageOf } from '@/lib/format-engine/load';
 import { buildRuntimeState } from '@/lib/format-engine/runtime/state';
 import { evaluateConstraints, mergeConstraintIssues } from '@/lib/format-engine/runtime/team';
-import { resolveTeamMembers } from '@/lib/format-engine/runtime/team-server';
+import { resolveTeamMembers, withVisiblePoolLevels } from '@/lib/format-engine/runtime/team-server';
 import { logger } from '@/lib/logger';
 import { expirePhaseReads, expirePublicTags, publicTags } from '@/lib/revalidation';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
@@ -116,7 +116,7 @@ async function evaluateTeamPolicy(
   const input = { pokemon, ruleset, playerId, seasonId: season.id, season };
   if (!kit) return checkTeam(input);
   const { format, stage, round } = kit;
-  const [base, runtime] = await Promise.all([checkTeam(input), getFormatRuntime(season.id)]);
+  const runtime = await getFormatRuntime(season.id);
   const { state, tunableIssues } = buildRuntimeState(format.spec, runtime, {
     tunables: format.tunables as Json,
     amendments: format.amendments as Json,
@@ -130,6 +130,7 @@ async function evaluateTeamPolicy(
   if (tunableIssues.length || failedExpressions.length) {
     throw Object.assign(staleFormat(), { cause: { tunableIssues, failedExpressions } });
   }
+  const base = await checkTeam({ ...input, ruleset: withVisiblePoolLevels(ruleset, { def: format.spec, state }) });
   return mergeConstraintIssues(base, issues, members);
 }
 

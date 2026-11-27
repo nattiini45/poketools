@@ -12,6 +12,12 @@ export default defineDe<typeof en>()({
     closed: 'Diese Liga ist abgeschlossen. Du kannst alles ansehen, aber es sind keine Aktionen mehr möglich.',
     empty: 'Für dich gibt es in dieser Liga gerade nichts zu tun.',
   },
+  pools: {
+    heading: 'Pokémon-Pools',
+    search: 'Pokémon suchen',
+    empty: 'Kein Pokémon passt zu deiner Suche.',
+    exactLevel: 'Pflichtlevel {level}',
+  },
   player: {
     former: 'ehemaliger Spieler',
   },

@@ -170,11 +170,15 @@ function checkDomains(out: Diagnostic[], lookup: Lookup): void {
     const ids = new Set<string>();
     domain.entries.forEach((entry, j) => {
       const at = (...path: (string | number)[]) => ptr('domains', i, 'entries', j, ...path);
-      if (ids.has(entry.id)) out.push(diag('domain_entry_duplicate', at('id'), { domain: domain.key, id: entry.id }));
-      ids.add(entry.id);
-      if (species !== undefined && !species.has(entry.id)) {
-        out.push(diag('domain_entry_unknown_species', at('id'), { domain: domain.key, id: entry.id }));
-      }
+      const checkId = (id: string, path: string) => {
+        if (ids.has(id)) out.push(diag('domain_entry_duplicate', path, { domain: domain.key, id }));
+        ids.add(id);
+        if (species !== undefined && !species.has(id)) {
+          out.push(diag('domain_entry_unknown_species', path, { domain: domain.key, id }));
+        }
+      };
+      checkId(entry.id, at('id'));
+      entry.aliases?.forEach((alias, k) => checkId(alias, at('aliases', k)));
       const keys = new Set<string>();
       entry.attrs.forEach((entryAttr, k) => {
         const base = { domain: domain.key, id: entry.id, attr: entryAttr.key };

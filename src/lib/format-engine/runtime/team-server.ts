@@ -11,7 +11,7 @@ import 'server-only';
 
 import type { Ruleset } from '@/types/ruleset';
 import type { PokemonSet, TeamValidationResult } from '@/types/team';
-import { getNationalSpecies, getSpecies } from '@/lib/pkmn/dex';
+import { getNationalItem, getNationalSpecies, getSpecies, getItem } from '@/lib/pkmn/dex';
 import { toID } from '@/lib/pkmn/i18n/id';
 import { readSet } from '@/lib/pkmn/validation';
 import { checkTeam } from '@/lib/team/check.server';
@@ -20,8 +20,10 @@ import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import type { LevelRuleEntry } from '@/lib/ruleset-kit/types';
 import { stageOf } from '../load';
 import { calendarRoundAt } from './calendar';
+import { domainView, entrySpecies, visibleEntries } from './domains';
 import { loadFreshKitContext, phaseById, type KitContext, type KitPhaseInfo } from './load';
 import { evaluateConstraints, mergeConstraintIssues, type ConstraintIssue, type EvolutionClass, type TeamMember } from './team';
 
@@ -59,17 +61,23 @@ function evolutionClass(nfe: boolean | undefined, tiers: readonly (string | unde
  */
 export function resolveTeamMembers(pokemon: readonly PokemonSet[], gen: number, national: boolean): TeamMember[] {
   const members: TeamMember[] = [];
+  const speciesOf = national ? getNationalSpecies : getSpecies;
+  const itemOf = national ? getNationalItem : getItem;
   for (const raw of pokemon) {
     const set = readSet(raw);
     if (set === null) {
       members.push({ name: '', species: '', baseName: '', baseSpecies: '', types: [], item: '', itemName: '', teraType: null, evolution: 'fe' });
       continue;
     }
-    const species = national ? getNationalSpecies(set.species, gen) : getSpecies(set.species, gen);
+    const species = speciesOf(set.species, gen);
     const id = toID(set.species);
+    const item = itemOf(set.item, gen);
+    const forced = item?.forcedForme ? speciesOf(item.forcedForme, gen) : undefined;
+    const effectiveSpecies = species && forced && forced.baseSpecies === species.baseSpecies ? toID(forced.name) : undefined;
     members.push({
       name: species?.name ?? set.species,
       species: species ? toID(species.name) : id,
+      ...(effectiveSpecies === undefined ? {} : { effectiveSpecies }),
       baseName: species?.baseSpecies ?? set.species,
       baseSpecies: species ? toID(species.baseSpecies ?? species.name) : id,
       types: species ? [...species.types] : [],
@@ -155,7 +163,7 @@ export async function evaluateTeam(input: EvaluateTeamInput): Promise<EvaluateTe
   ]);
   const base = await checkTeam({
     pokemon: input.pokemon,
-    ruleset,
+    ruleset: ruleset === null ? null : withVisiblePoolLevels(ruleset, ctx),
     // A phase whose pin cannot be read is a failed check, reported by checkTeam, never a silent downgrade.
     ...(ruleset === null ? { rulesetFailure: 'ruleset_not_found' as const, format: 'gen9' } : {}),
     playerId: input.playerId,
@@ -172,6 +180,29 @@ export async function evaluateTeam(input: EvaluateTeamInput): Promise<EvaluateTe
     ruleset,
   });
   return { applies: true, result: mergeConstraintIssues(base, issues, members) };
+}
+
+/** Apply level overrides at this league's visibility boundary, without publishing them in its reusable ruleset. */
+export function withVisiblePoolLevels(ruleset: Ruleset, { def, state }: Pick<KitContext, 'def' | 'state'>): Ruleset {
+  const poolLevels = new Map<string, LevelRuleEntry>();
+  for (const domain of domainView(def, state.flags, state.amendments)) {
+    if (!domain.unlocked) continue;
+    for (const entry of visibleEntries(domain, false)) {
+      if (entry.exact_level === undefined) continue;
+      for (const id of entrySpecies(entry)) {
+        if (!poolLevels.has(id)) poolLevels.set(id, { id, level: entry.exact_level, policy: 'exact', status: 'approved' });
+      }
+    }
+  }
+  if (poolLevels.size === 0) return ruleset;
+  const levels = ruleset.rules.levels ?? { policy: 'max', default: 100, entries: [] };
+  return {
+    ...ruleset,
+    rules: {
+      ...ruleset.rules,
+      levels: { ...levels, entries: [...levels.entries.filter((entry) => !poolLevels.has(entry.id)), ...poolLevels.values()] },
+    },
+  };
 }
 
 /** The ruleset a phase pins, or null when the phase or its ruleset does not exist. */

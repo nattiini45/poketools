@@ -63,6 +63,29 @@ describe('PlayerFormatView: what it shows', () => {
     expect(screen.getByText(t('page.notRunning'))).toBeTruthy();
   });
 
+  it('searches the available pool cards and displays localized details and exact levels', async () => {
+    const { user, t } = setup(runningView({ actions: [], pools: [
+      {
+        key: 'regular', label: ltext('en', 'Regular pool'), unlocked: true,
+        overview: { entries: [{ id: 'pikachu', detail: ltext('en', 'Attacker', 'Angreifer') }] },
+      },
+      {
+        key: 'bonus', label: ltext('en', 'Bonus pool'), unlocked: true,
+        overview: { rules: ltext('en', 'Use two bonus Pokémon.'), entries: [{ id: 'mewtwo', exact_level: 88 }] },
+      },
+    ] }), { locale: 'de' });
+    expect(screen.getByRole('heading', { level: 2, name: t('pools.heading') })).toBeTruthy();
+    expect(screen.getByText('Angreifer')).toBeTruthy();
+    expect(screen.getByText('Use two bonus Pokémon.')).toBeTruthy();
+    expect(screen.getByText(t('pools.exactLevel', { level: 88 }))).toBeTruthy();
+    const search = screen.getByRole('searchbox', { name: t('pools.search') });
+    await user.type(search, 'Mewtu');
+    expect(screen.queryByText('Pikachu')).toBeNull();
+    expect(screen.getByText('Mewtu')).toBeTruthy();
+    await user.type(search, 'nomatch');
+    expect(screen.getByText(t('pools.empty'))).toBeTruthy();
+  });
+
   it('renders in German', () => {
     setup(runningView({ ladders: [ladder()] }), { locale: 'de' });
     expect(screen.getByRole('heading', { level: 2, name: 'Deine Aktionen' })).toBeTruthy();

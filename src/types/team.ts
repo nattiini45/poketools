@@ -143,6 +143,7 @@ export type ValidationIssueCode =
   | 'kit_roster_size'
   | 'kit_count_min'
   | 'kit_count_max'
+  | 'kit_team_rules_unavailable'
   | 'kit_not_allowed'
   | 'kit_distinct'
   | 'kit_type_quota'
@@ -263,4 +264,3 @@ export interface TeamLibraryListParams {
   tags?: string[];
   search?: string;
 }
-

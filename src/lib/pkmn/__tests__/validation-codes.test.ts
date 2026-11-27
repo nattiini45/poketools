@@ -136,7 +136,7 @@ describe('teambuilder.validation.issue catalog', () => {
     'tera_match_no_core', 'evolution_stage_cap', 'not_in_roster',
     'ev_stat_invalid', 'iv_range', 'level_range', 'level_exact', 'level_max', 'malformed_set', 'duplicate_move', 'move_illegal', 'ability_illegal',
     'ruleset_load_failed', 'core_load_failed',
-    'kit_roster_size', 'kit_count_min', 'kit_count_max', 'kit_distinct', 'kit_type_quota', 'kit_tera_banned',
+    'kit_roster_size', 'kit_count_min', 'kit_count_max', 'kit_team_rules_unavailable', 'kit_distinct', 'kit_type_quota', 'kit_tera_banned',
     'kit_tera_stab', 'kit_tera_attr', 'kit_evolution_stage', 'kit_constraint_expr', 'kit_not_allowed',
   ];
 
