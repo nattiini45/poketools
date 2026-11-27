@@ -450,13 +450,21 @@ describe('relation links and the draw', () => {
     expect(call.delta).toEqual({ reveal: true, link_count: PLAYERS.length, draw: true });
   });
 
-  it('refuses an admin draw when the format gives the draw to an event', async () => {
+  it('reserves assignment for the event and allows an admin to reveal existing links', async () => {
     const ctx = context();
     ctx.def = { ...ctx.def, relations: ctx.def.relations?.map((relation) => ({ ...relation, draw: 'event' })) };
     vi.mocked(loadFreshKitContext).mockResolvedValue(ctx);
     await expect(applyAdjustment(request({ kind: 'relation', relation: 'santa', draw: true })))
       .resolves.toEqual({ ok: false, issue: 'adjust_not_allowed' });
+    await expect(applyAdjustment(setLinks(CYCLE))).resolves.toEqual({ ok: false, issue: 'adjust_not_allowed' });
     expect(applyFormatAdjustment).not.toHaveBeenCalled();
+
+    vi.mocked(loadFreshKitContext).mockResolvedValue({
+      ...ctx,
+      state: { ...ctx.state, links: [link('p1', 'p2')] },
+    });
+    await expect(applyAdjustment(request({ kind: 'relation', relation: 'santa', reveal: true }))).resolves.toMatchObject({ ok: true });
+    expect(vi.mocked(applyFormatAdjustment).mock.calls[0][0].ops).toEqual([{ op: 'reveal_relation', relation: 'santa' }]);
   });
 
   it('refuses a draw over existing links, below two players, together with links, and on a manual relation', async () => {

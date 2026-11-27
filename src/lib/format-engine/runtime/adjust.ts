@@ -293,7 +293,7 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
       const relation = (def.relations ?? []).find((r) => r.key === adjustment.relation);
       if (relation === undefined) return 'unknown_target';
       const draw = adjustment.draw === true;
-      if (draw && relation.draw === 'event') return 'adjust_not_allowed';
+      if (relation.draw === 'event' && (draw || adjustment.links !== undefined)) return 'adjust_not_allowed';
       if (draw && adjustment.links !== undefined) return 'invalid_links';
       // Nothing to reveal, set or draw: the row would record a change that never happened.
       if (!draw && adjustment.links === undefined && adjustment.reveal !== true) return 'invalid_links';
