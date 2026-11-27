@@ -220,6 +220,20 @@ it('refuses invalid manual pairings without a round write', async () => {
   expect(m.expire).not.toHaveBeenCalled();
 });
 
+it('checks the previous native round before writing manual strict Swiss pairings', async () => {
+  m.prepareKit.mockResolvedValue({
+    revision: 5, pairing: { kind: 'swiss', rounds: 6, avoid_repeats: true, no_consecutive_repeats: true },
+  });
+  m.phase.mockResolvedValue({ ...phase, current_round: 1 });
+  m.rounds.mockResolvedValue([{ ...round, status: 'completed' }]);
+  m.matches.mockResolvedValue([{ player_1_id: p2, player_2_id: p1 }]);
+  const response = await POST(request('POST', { pairings }), ctx());
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: 'swiss_manual_consecutive_repeat' });
+  expect(m.matches).toHaveBeenCalledExactlyOnceWith(rid);
+  expect(m.create).not.toHaveBeenCalled();
+});
+
 it('does not start grouped Swiss without an existing native mirror', async () => {
   m.seasonGroups.mockResolvedValue([{ id: 'group-a', player_ids: [p1, p2, p3] }]);
   expect(await (await POST(request('POST', { pairings }), ctx())).json()).toMatchObject({ code: 'PHASE_GROUPS_STALE' });

@@ -3,6 +3,7 @@ import { readJsonBody } from '@/lib/api/json-body';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { requirePlayer } from '@/lib/auth/helpers';
+import { assertManualSwissPairings } from '@/lib/format-engine/pairing';
 import { expirePhaseReads } from '@/lib/revalidation';
 import { getPhaseParticipants } from '@/lib/supabase/queries/league-phases';
 import { getGroupsByPhase } from '@/lib/supabase/queries/phase-groups';
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
       });
     }
     const roundNumber = phase.current_round + 1;
+    if (current) await assertManualSwissPairings(kit?.pairing, matches, () => getPhaseMatchesByRound(current.id));
     const name = body.name || `Round ${roundNumber}`;
     const byes = phase.bracket_type === 'swiss' || phase.bracket_type === 'round_robin' ? unpaired : [];
     if (phase.bracket_type === 'swiss' && rounds.length === 0) {

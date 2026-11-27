@@ -893,6 +893,15 @@ export async function getMatchesByRound(roundId: string): Promise<MatchWithPlaye
   return data.map((row: MatchWithPlayersRow) => toMatchWithPlayers(row));
 }
 
+/** All fixtures in the round, including unfinished matches, for Swiss rematch checks. */
+export function getMatchPairsByRound(roundId: string): Promise<Pick<MatchRecord, 'player_1_id' | 'player_2_id'>[]> {
+  return readAllPages((from, to) => supabase.from('matches')
+    .select('player_1_id, player_2_id')
+    .eq('round_id', roundId)
+    .order('id')
+    .range(from, to));
+}
+
 /** Pages `getMatchesByTournament` reads at most: 10 000 matches in one tournament. */
 const TOURNAMENT_MATCH_MAX_PAGES = 10;
 

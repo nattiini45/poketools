@@ -18,11 +18,13 @@
  *   (`format_challenges`, `challenge.ts`), and an accepted challenge becomes a match.
  */
 import type { GroupsSpec, Pairing, Stage } from '@/lib/format-kit/types';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { ceilLog2 } from '@/lib/format-kit/engine/plan';
 import { seededRand } from '@/lib/format-kit/expr/rand';
 import { generateBipartiteRound } from '@/lib/tournament/bipartite';
 import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { generateSwissRound } from '@/lib/tournament/swiss';
+import { buildPairingHistory, havePlayed } from '@/lib/tournament/standings';
 import type { ByeRecord, GeneratedRound, MatchRecord } from '@/lib/tournament/types';
 import { computeStageStandings, type KitOutcome, type StageTableExtras } from './standings';
 
@@ -39,6 +41,21 @@ export function roundRobinOf(pairing: Pairing): RoundRobinPairing | null {
 function swissOf(pairing: Pairing): SwissPairing | null {
   if (pairing.kind === 'swiss') return pairing;
   return pairing.kind === 'filter' && pairing.base.kind === 'swiss' ? pairing.base : null;
+}
+
+/** Check hand-entered pairs against the strict Swiss stage's immediately preceding round. */
+export async function assertManualSwissPairings(
+  pairing: Pairing | undefined,
+  pairs: Parameters<typeof buildPairingHistory>[0],
+  loadPreviousMatches: () => Promise<Parameters<typeof buildPairingHistory>[0]>,
+): Promise<void> {
+  if (!pairing || !swissOf(pairing)?.no_consecutive_repeats) return;
+  const previous = buildPairingHistory(await loadPreviousMatches());
+  if (pairs.some(({ player_1_id, player_2_id }) => havePlayed(previous, player_1_id, player_2_id))) {
+    throw new UserFacingError('Swiss pairings cannot repeat a matchup from the previous round.', {
+      code: 'swiss_manual_consecutive_repeat', status: 409,
+    });
+  }
 }
 
 /** Rounds a stage plays with `n` players, or null when the stage is not paired round by round here. */
@@ -207,6 +224,12 @@ export function pairNextRound(input: KitPairingInput): KitPairingResult {
     ranked,
     pairedMatches: swiss.avoid_repeats ? input.pairedMatches : [],
     ...(pairing.kind === 'filter' ? { allowPair: input.allowPair } : {}),
+    ...(swiss.no_consecutive_repeats && {
+      strict: {
+        previousRound: buildPairingHistory(input.pairedMatches.filter((match) => match.round_number === roundNumber - 1)),
+        points: new Map(table.map((row) => [row.player_id, row.points])),
+      },
+    }),
   });
   return { kind: 'round', round };
 }

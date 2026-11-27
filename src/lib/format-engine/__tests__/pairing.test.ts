@@ -101,6 +101,45 @@ describe('pairNextRound', () => {
     const result = pairNextRound(input({ kind: 'round_robin', legs: 1, mirror_legs: true }, { roundNumber: 2 }));
     expect(result).toEqual({ kind: 'round', round: roundRobinLegRound(ids, { kind: 'round_robin', legs: 1, mirror_legs: true }, 2) });
   });
+
+  it('blocks previous-round opponents even if repeat preference is off and results are pending', () => {
+    const previous: MatchRecord[] = [
+      { player_1_id: 'b', player_2_id: 'a', winner_id: null, round_number: 1 },
+      { player_1_id: 'd', player_2_id: 'c', winner_id: null, round_number: 1 },
+    ];
+    const result = pairNextRound(input(
+      { kind: 'swiss', rounds: 3, avoid_repeats: false, no_consecutive_repeats: true },
+      { pairedMatches: previous, roundNumber: 2 },
+    ));
+    expect(result.kind === 'round' && result.round.pairings.map(pairKey).sort()).toEqual(['a-c', 'b-d']);
+  });
+
+  it('allows older repeats and minimises the cumulative points gap among equivalent pairings', () => {
+    const previous: MatchRecord[] = [
+      { player_1_id: 'a', player_2_id: 'c', winner_id: 'a', round_number: 1 },
+      { player_1_id: 'b', player_2_id: 'd', winner_id: 'b', round_number: 1 },
+      { player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 2 },
+      { player_1_id: 'c', player_2_id: 'd', winner_id: 'c', round_number: 2 },
+      { player_1_id: 'a', player_2_id: 'd', winner_id: 'a', round_number: 3 },
+      { player_1_id: 'b', player_2_id: 'c', winner_id: 'b', round_number: 3 },
+    ];
+    const result = pairNextRound(input(
+      { kind: 'swiss', rounds: 4, avoid_repeats: true, no_consecutive_repeats: true },
+      { matches: previous, pairedMatches: previous, roundNumber: 4 },
+    ));
+    expect(result.kind === 'round' && result.round.pairings.map(pairKey).sort()).toEqual(['a-b', 'c-d']);
+    expect(result.kind === 'round' && result.round.rematches).toBe(2);
+  });
+
+  it('refuses an impossible strict round, including inside a filter', () => {
+    const previous: MatchRecord[] = [{ player_1_id: 'a', player_2_id: 'b', winner_id: 'a', round_number: 1 }];
+    const base = { kind: 'swiss', rounds: 2, avoid_repeats: true, no_consecutive_repeats: true } as const;
+    const args = { participantIds: ['a', 'b'], pairedMatches: previous, roundNumber: 2 };
+    expect(() => pairNextRound(input(base, args))).toThrow(/without repeating a pairing/);
+    expect(() => pairNextRound(input(
+      { kind: 'filter', base, allow: { k: 'bool', v: true } }, { ...args, allowPair: () => true },
+    ))).toThrow(/without repeating a pairing/);
+  });
 });
 
 describe('formKitGroups', () => {

@@ -326,10 +326,13 @@ const DESCRIBERS: ReadonlyMap<AvailableKind, Describer> = new Map<AvailableKind,
   ),
   d(
     'pairing.swiss',
-    (n): Described | null => {
-      if (n.rounds === 'auto') return { key: 'pairing_swiss_auto', params: {} };
+    (n, c): Described | null => {
+      const append = bool(n, 'no_consecutive_repeats') === true
+        ? [c.word('describe', 'pairing_swiss_consecutive_blocked', '')]
+        : undefined;
+      if (n.rounds === 'auto') return { key: 'pairing_swiss_auto', params: {}, append };
       const rounds = num(n, 'rounds');
-      return rounds === null ? null : { params: { count: rounds } };
+      return rounds === null ? null : { params: { count: rounds }, append };
     },
   ),
   d('pairing.single_elim', (n) => ({ key: bool(n, 'third_place') === true ? 'pairing_single_elim_third' : undefined, params: {} })),

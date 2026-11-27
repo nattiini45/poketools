@@ -92,12 +92,12 @@ export interface GroupsSpec {
 
 /** The pairings a `filter` can wrap: the two that pair a whole field every round. */
 export type FilterBase =
-  | { kind: 'swiss'; rounds: number | 'auto'; avoid_repeats: boolean }
+  | { kind: 'swiss'; rounds: number | 'auto'; avoid_repeats: boolean; no_consecutive_repeats?: boolean }
   | { kind: 'round_robin'; legs: number; mirror_legs: boolean };
 
 export type Pairing =
   | { kind: 'round_robin'; legs: number; mirror_legs: boolean }
-  | { kind: 'swiss'; rounds: number | 'auto'; avoid_repeats: boolean }
+  | { kind: 'swiss'; rounds: number | 'auto'; avoid_repeats: boolean; no_consecutive_repeats?: boolean }
   | { kind: 'single_elim'; third_place: boolean }
   | { kind: 'double_elim'; bracket_reset: boolean }
   | { kind: 'manual' }

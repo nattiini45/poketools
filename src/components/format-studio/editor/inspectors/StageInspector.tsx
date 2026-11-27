@@ -492,6 +492,12 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
                 checked={pairing.avoid_repeats}
                 onChange={(checked) => edit((s) => patchPairing(s, { avoid_repeats: checked }))}
               />
+              <CheckboxField
+                pointer={ptr('stages', index, 'pairing', 'no_consecutive_repeats')}
+                label={p('field.no_consecutive_repeats')}
+                checked={pairing.no_consecutive_repeats === true}
+                onChange={(checked) => edit((s) => patchPairing(s, { no_consecutive_repeats: checked }))}
+              />
             </div>
           )}
           {pairing.kind === 'single_elim' && (

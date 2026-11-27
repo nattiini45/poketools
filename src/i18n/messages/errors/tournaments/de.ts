@@ -54,6 +54,8 @@ export default defineDe<typeof en>()({
   round_best_of_locked: 'Das Best-of lässt sich nur bei Runden ändern, die noch nicht begonnen haben.',
   rounds_round_robin_only: 'Alle Runden auf einmal lassen sich nur im Modus „Jeder gegen jeden“ erstellen.',
   rounds_all_generated: 'Alle Runden wurden bereits erstellt.',
+  swiss_consecutive_repeat_blocked: 'Es konnte keine vollständige Schweizer Runde ohne eine Wiederholung aus der Vorrunde erstellt werden.',
+  swiss_manual_consecutive_repeat: 'Eine Paarung aus der Vorrunde darf im Schweizer System nicht wiederholt werden.',
   rounds_manual_pairing: 'Diese Phase wird von Hand gepaart. Lege ihre Runden im Editor für manuelle Runden an.',
   rounds_challenge_ladder:
     'Diese Phase ist eine Herausforderungsleiter: Ihre Matches entstehen aus angenommenen Herausforderungen. Lege ihre Runden im Editor für manuelle Runden an.',

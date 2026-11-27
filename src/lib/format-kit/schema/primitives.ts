@@ -80,6 +80,7 @@ export const pairingSwissSchema = z.strictObject({
   kind: z.literal('swiss'),
   rounds: z.union([intRange(1, MAX_SWISS_ROUNDS), z.literal('auto')]),
   avoid_repeats: z.boolean().default(true),
+  no_consecutive_repeats: z.boolean().optional(),
 });
 export const pairingSingleElimSchema = z.strictObject({
   kind: z.literal('single_elim'),
