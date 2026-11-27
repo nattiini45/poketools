@@ -308,7 +308,7 @@ The sixteen expression codes are `expr_shape`, `expr_depth`, `expr_nodes`, `expr
 
 `swiss_rounds_too_many` applies only when `avoid_repeats` is on, and compares the rounds with what a round robin of that field plays (`n - 1` for an even field, `n` for an odd one).
 
-The Swiss option `no_consecutive_repeats` also works in a filtered Swiss stage. It excludes any pairing from the immediately preceding round, including scheduled matches. It uses the stage's cumulative points to minimise the total points gap among pairings of equal filter and repeat cost within the search budget. If the generator cannot find a complete round under this restriction, it returns a conflict before writing the round.
+The Swiss option `no_consecutive_repeats` also works in a filtered Swiss stage. It excludes any pairing from the immediately preceding round, including scheduled matches. It uses the stage's cumulative points to minimise the total points gap among pairings of equal filter and repeat cost within the search budget. If the generator cannot find a complete round under this restriction, it returns a conflict before writing the round. The legacy and native manual-round routes apply the same previous-round check before writing Swiss fixtures.
 
 `metric_unproduced` uses the production table of the standings engine: `points`, `wins`, `losses`, `games_played` and `seed` always; `kill_differential` needs `features.killStats`; `rating` needs `features.rating`; `buchholz` needs a round-robin or Swiss stage with two players per match; any other key is `unknown_metric`. The reasons are `unknown_metric`, `needs_kill_stats`, `needs_rating` and `needs_opponents`.
 

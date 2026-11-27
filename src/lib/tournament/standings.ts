@@ -243,7 +243,7 @@ export function computeStandingsForFormat(
  * already had one (a bye creates no match, so it is not in `matches`).
  */
 export function buildPairingHistory(
-  matches: MatchRecord[],
+  matches: readonly Pick<MatchRecord, 'player_1_id' | 'player_2_id'>[],
   byes: ByeRecord[] = [],
 ): Set<string> {
   const history = new Set<string>();

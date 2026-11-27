@@ -68,6 +68,7 @@ export default {
   rounds_round_robin_only: 'Generate-all-rounds is only supported for round_robin tournaments',
   rounds_all_generated: 'All rounds have already been generated',
   swiss_consecutive_repeat_blocked: 'Could not generate a complete Swiss round without repeating a pairing from the previous round.',
+  swiss_manual_consecutive_repeat: 'Swiss pairings cannot repeat a matchup from the previous round.',
   rounds_manual_pairing: 'This phase is paired by hand. Create its rounds in the manual round editor.',
   rounds_challenge_ladder:
     'This phase is a challenge ladder: its matches come from accepted challenges. Create its rounds in the manual round editor.',
